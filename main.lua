@@ -245,7 +245,7 @@ local function IsSeller(o)
 end
 
 task.spawn(function()
-    while task.wait(0.8) do
+    while task.wait(1.5) do
         local m, l, s = {}, {}, {}
         local function Scan(f)
             for _, o in ipairs(f:GetChildren()) do
@@ -303,11 +303,18 @@ local function ClosestMob()
     return best
 end
 
+local lastAimCheck = 0
+local currentAimTarget = nil
+
 RS.RenderStepped:Connect(function(dt)
     if CFG.Aim then
-        local t = ClosestMob()
-        if t then
-            local target = CFrame.new(CAM.CFrame.Position, t.Position)
+        lastAimCheck = lastAimCheck + dt
+        if lastAimCheck > 0.06 then 
+            lastAimCheck = 0
+            currentAimTarget = ClosestMob()
+        end
+        if currentAimTarget then
+            local target = CFrame.new(CAM.CFrame.Position, currentAimTarget.Position)
             local a = math.clamp(dt * (60 / math.max(CFG.AimSmooth, 1)), 0, 1)
             CAM.CFrame = CAM.CFrame:Lerp(target, a)
         end
@@ -407,7 +414,7 @@ local function RefreshESP(o, clr, name, key, maxD)
 end
 
 task.spawn(function()
-    while task.wait(0.15) do
+    while task.wait(0.3) do
         if CFG.P_ESP then
             for _, p in ipairs(P:GetPlayers()) do
                 if p ~= LP and p.Character then
@@ -518,7 +525,7 @@ local function ApplyChams(model, visible, isMonster)
 end
 
 task.spawn(function()
-    while task.wait(0.15) do
+    while task.wait(0.3) do
         if not CFG.Chams then
             for model in pairs(ActiveChams) do RemoveChams(model) end
         else
@@ -579,7 +586,12 @@ local function UpdateAimCircle()
         if AimCircleStroke then AimCircleStroke.Color = CFG.MenuAccent end
     end
 end
-RS.RenderStepped:Connect(UpdateAimCircle)
+
+task.spawn(function()
+    while task.wait(0.1) do
+        UpdateAimCircle()
+    end
+end)
 
 local EffectFolder = nil
 local EffectRunning = false
