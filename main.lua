@@ -59,8 +59,9 @@ local CFG = {
     EffectColor = Color3.fromRGB(0, 170, 255),
     EffectSpeed = 1,
     EffectTransparency = 0.4,
-    EffectOrbitRadius = 4,
-    EffectOrbitWidth = 0.3,
+    EffectOrbitRadius = 5,
+    EffectOrbitGlow = true,
+    EffectGlowDistance = 4,
     EffectRGB = false,
     
     Language = "RU",
@@ -312,7 +313,6 @@ local lastAimCheck = 0
 local currentAimTarget = nil
 
 RS.RenderStepped:Connect(function(dt)
-    -- Аим
     if CFG.Aim then
         lastAimCheck = lastAimCheck + dt
         if lastAimCheck > 0.06 then 
@@ -326,7 +326,6 @@ RS.RenderStepped:Connect(function(dt)
         end
     end
 
-    -- Спидхак и NoClip
     local char = LP.Character
     if char then
         local hum = char:FindFirstChildOfClass("Humanoid")
@@ -339,17 +338,12 @@ RS.RenderStepped:Connect(function(dt)
             local wasNoClip = char:GetAttribute("sAs_LastNoClip")
             
             if isCurrentlyNoClip then
-                -- Включаем NoClip (отключаем коллизию у ВСЕХ частей, включая оружие)
                 for _, p in ipairs(char:GetDescendants()) do
                     if p:IsA("BasePart") then p.CanCollide = false end
                 end
             else
-                -- Если мы только что выключили NoClip
                 if wasNoClip == true then
-                    -- 1. Поднимаем наверх (чтобы выйти из пола)
                     rootPart.CFrame = rootPart.CFrame + Vector3.new(0, 3, 0)
-                    
-                    -- 2. Ждем 0.1 сек и включаем коллизию только для тела
                     task.spawn(function()
                         task.wait(0.1)
                         for _, p in ipairs(char:GetDescendants()) do
@@ -378,9 +372,6 @@ RS.RenderStepped:Connect(function(dt)
         if L.Brightness ~= OriginalLighting.Brightness then L.Brightness = OriginalLighting.Brightness end
     end
 end)
--- ==========================================
--- НОВАЯ СИСТЕМА ЭФФЕКТОВ (С ЛИНИЕЙ И RGB)
--- ==========================================
 local function RemoveESP(o)
     local d = ActiveESP[o]
     if d then
@@ -628,23 +619,21 @@ task.spawn(function()
 end)
 
 -- ==========================================
--- 3D ЭФФЕКТЫ (ОПТИМИЗИРОВАННЫЕ)
+-- 3D ЭФФЕКТЫ (МНОГО ТОЧЕК)
 -- ==========================================
 local EffectFolder = nil
 local EffectRunning = false
 local EffectTask = nil
 local EffectParts = {}
-local EffectBeam = nil
 
 local EffectDescriptions = {
     Fireflies = "Светлячки", Sparks = "Искры", Rain = "Дождь",
-    Snow = "Снег", Orbits = "Кольцо (Линия)", GroundGlow = "Свечение",
+    Snow = "Снег", Orbits = "Кольцо из точек", GroundGlow = "Свечение",
 }
 
 local function ClearEffectParts()
     if EffectFolder then pcall(function() EffectFolder:Destroy() end) EffectFolder = nil end
     EffectParts = {}
-    EffectBeam = nil
 end
 
 local function StopCurrentEffect()
@@ -665,10 +654,6 @@ local function MakePart(name, size, clr, transparency, parent)
     p.CastShadow = false
     p.Locked = true
     p.Parent = parent
-    local light = Instance.new("PointLight", p)
-    light.Color = clr
-    light.Range = 8
-    light.Brightness = 2
     return p
 end
 
@@ -769,69 +754,50 @@ local function StartEffectByName(name)
             end
         end)
     elseif name == "Orbits" then
-        -- НОВЫЙ ЭФФЕКТ: Линия-кольцо
-        local points = 12
-        local radius = CFG.EffectOrbitRadius or 4
-        
-        -- Создаём точки
-        local attachments = {}
-        for i = 1, points do
-            local p = MakePart("OrbitPoint", Vector3.new(0.2, 0.2, 0.2), clr, 1, EffectFolder)
-            p.Anchored = true
-            p.CanCollide = false
-            table.insert(attachments, {part = p, angle = (i / points) * math.pi * 2})
+        local pointsCount = 24
+        for i = 1, pointsCount do
+            local p = MakePart("OrbitPoint", Vector3.new(0.4, 0.4, 0.4), clr, trans, EffectFolder)
+            table.insert(EffectParts, {part = p, angle = (i / pointsCount) * math.pi * 2})
         end
-
-        -- Создаём Beam (луч) для соединения
-        local beam = Instance.new("Beam")
-        beam.Parent = EffectFolder
-        beam.FaceCamera = true
-        beam.Segments = 10
-        beam.Width0 = CFG.EffectOrbitWidth or 0.3
-        beam.Width1 = CFG.EffectOrbitWidth or 0.3
-        beam.Color = ColorSequence.new(clr)
-        beam.Transparency = NumberSequence.new(trans)
         
-        local a0 = Instance.new("Attachment", attachments[1].part)
-        local a1 = Instance.new("Attachment", attachments[#attachments].part)
-        beam.Attachment0 = a0
-        beam.Attachment1 = a1
-
-        -- Сохраняем в таблицу для обновления
-        EffectBeam = {beam = beam, points = attachments, radius = radius, segments = points}
-        table.insert(EffectParts, EffectBeam)
-
         EffectTask = task.spawn(function()
             local colorStep = 0
             while EffectRunning and EffectFolder and EffectFolder.Parent do
                 local t = tick() * speed
                 
-                -- Движение точек по кругу
-                for i, data in ipairs(EffectBeam.points) do
+                if CFG.EffectRGB then
+                    colorStep = colorStep + 0.5 * speed
+                    local hue = (colorStep / 360) % 1
+                    clr = Color3.fromHSV(hue, 1, 1)
+                end
+
+                for i, data in ipairs(EffectParts) do
                     if data.part and data.part.Parent then
                         local angle = data.angle + t
+                        local radius = CFG.EffectOrbitRadius
+                        local height = math.sin(t * 2 + i) * 1.5
+                        
                         data.part.Position = hrp.Position + Vector3.new(
-                            math.cos(angle) * EffectBeam.radius,
-                            math.sin(t * 1.5 + i) * 1.5, -- Высота (изгиб)
-                            math.sin(angle) * EffectBeam.radius
+                            math.cos(angle) * radius,
+                            height,
+                            math.sin(angle) * radius
                         )
+                        
+                        data.part.Color = clr
+                        if CFG.EffectOrbitGlow then
+                            local light = data.part:FindFirstChildOfClass("PointLight")
+                            if not light then
+                                light = Instance.new("PointLight", data.part)
+                            end
+                            light.Color = clr
+                            light.Range = CFG.EffectGlowDistance
+                            light.Brightness = 2
+                        else
+                            local light = data.part:FindFirstChildOfClass("PointLight")
+                            if light then light:Destroy() end
+                        end
                     end
                 end
-                
-                -- Обновление ширины и цвета
-                if EffectBeam.beam and EffectBeam.beam.Parent then
-                    EffectBeam.beam.Width0 = CFG.EffectOrbitWidth or 0.3
-                    EffectBeam.beam.Width1 = CFG.EffectOrbitWidth or 0.3
-                    
-                    if CFG.EffectRGB then
-                        colorStep = colorStep + 0.02 * speed
-                        local hue = (colorStep % 1)
-                        EffectBeam.beam.Color = ColorSequence.new(Color3.fromHSV(hue, 1, 1))
-                    else
-                        EffectBeam.beam.Color = ColorSequence.new(clr)
-                    end
-                end
-                
                 task.wait(0.03)
             end
         end)
@@ -867,6 +833,9 @@ end
 local function RefreshEffects()
     StartEffectByName(CFG.SelectedEffect)
 end
+-- ==========================================
+-- UI МЕНЮ (ДИЗАЙН)
+-- ==========================================
 local MenuGui = Instance.new("ScreenGui")
 MenuGui.Name = "sAs_pop_Menu"
 MenuGui.ResetOnSpawn = false
@@ -877,7 +846,7 @@ MenuGui.Parent = GUIPARENT
 
 local Main = Instance.new("Frame", MenuGui)
 Main.Name = "Main"
-Main.Size = UDim2.new(0, 1, 0, 1)
+Main.Size = UDim2.new(0, CFG.MenuSizeX, 0, CFG.MenuSizeY)
 Main.Position = UDim2.new(0.5, -CFG.MenuSizeX/2, 0.5, -CFG.MenuSizeY/2)
 Main.BackgroundColor3 = CFG.MenuColor
 Main.BackgroundTransparency = 0.05
@@ -893,10 +862,12 @@ MainStroke.Color = CFG.MenuAccent
 MainStroke.Thickness = 1.5
 MainStroke.Transparency = 0.5
 
-TS:Create(Main, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-    Size = UDim2.new(0, CFG.MenuSizeX, 0, CFG.MenuSizeY)
+-- Плавное появление
+TS:Create(Main, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+    BackgroundTransparency = 0.05
 }):Play()
 
+-- Боковая панель (Сайдбар)
 local Sidebar = Instance.new("Frame", Main)
 Sidebar.Size = UDim2.new(0, 170, 1, 0)
 Sidebar.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
@@ -905,6 +876,7 @@ Sidebar.BorderSizePixel = 0
 Sidebar.ClipsDescendants = true
 Instance.new("UICorner", Sidebar).CornerRadius = UDim.new(0, 16)
 
+-- Логотип
 local LogoFrame = Instance.new("Frame", Sidebar)
 LogoFrame.Size = UDim2.new(1, -24, 0, 60)
 LogoFrame.Position = UDim2.new(0, 12, 0, 12)
@@ -973,6 +945,7 @@ Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 10)
 CloseBtn.MouseEnter:Connect(function() TS:Create(CloseBtn, TweenInfo.new(0.15), {BackgroundTransparency = 0.3}):Play() end)
 CloseBtn.MouseLeave:Connect(function() TS:Create(CloseBtn, TweenInfo.new(0.15), {BackgroundTransparency = 0.7}):Play() end)
 
+-- Контентная часть
 local Body = Instance.new("Frame", Main)
 Body.Size = UDim2.new(1, -170, 1, 0)
 Body.Position = UDim2.new(0, 170, 0, 0)
@@ -1095,6 +1068,7 @@ local PageChams  = MakeTab("chams",  T("chams"),  "🎨")
 local PageEffect = MakeTab("effect", T("effects"),"✨")
 local PageMenu   = MakeTab("menu",   T("menu"),   "⚙")
 
+-- Фабрики UI
 local function Section(parent, title)
     local holder = Instance.new("Frame", parent)
     holder.Size = UDim2.new(1, 0, 0, 26)
@@ -1335,6 +1309,9 @@ ApplyMenuColors = function()
     end
     if ToggleStroke then ToggleStroke.Color = CFG.MenuAccent end
 end
+-- ==========================================
+-- НАПОЛНЕНИЕ СТРАНИЦ
+-- ==========================================
 Section(PageSpeed, T("speed"))
 Check(PageSpeed, "SJ", T("speedhack"))
 Slider(PageSpeed, "Speed", T("speed"), 16, 300)
@@ -1433,9 +1410,9 @@ Slider(PageEffect, "EffectSpeed", T("eff_speed"), 0.1, 5, 0.1)
 Slider(PageEffect, "EffectTransparency", T("eff_transp"), 0, 1, 0.05)
 ColorPicker(PageEffect, "EffectColor", T("eff_color"))
 
--- Новые настройки для кольца
 Slider(PageEffect, "EffectOrbitRadius", "Радиус кольца", 1, 15, 0.5)
-Slider(PageEffect, "EffectOrbitWidth", "Ширина кольца", 0.05, 2, 0.05)
+Check(PageEffect, "EffectOrbitGlow", "Включить свечение")
+Slider(PageEffect, "EffectGlowDistance", "Дальность свечения", 1, 20, 1)
 Check(PageEffect, "EffectRGB", "RGB режим")
 
 Section(PageMenu, T("menu"))
@@ -1553,6 +1530,9 @@ end)
 
 Check(PageMenu, "ConfirmExit", T("confirm_exit"))
 
+-- ==========================================
+-- TOGGLE-КНОПКА
+-- ==========================================
 local ToggleBtn = Instance.new("TextButton", MenuGui)
 ToggleBtn.Name = "ToggleBtn"
 ToggleBtn.Size = UDim2.new(0, CFG.ToggleBtnSize, 0, CFG.ToggleBtnSize)
@@ -1608,6 +1588,9 @@ ToggleBtn.MouseButton1Click:Connect(function()
     end
 end)
 
+-- ==========================================
+-- ПОДТВЕРЖДЕНИЕ ВЫХОДА
+-- ==========================================
 local ConfirmGui = Instance.new("ScreenGui")
 ConfirmGui.Name = "sAs_pop_Confirm"
 ConfirmGui.ResetOnSpawn = false
