@@ -68,10 +68,10 @@ local CFG = {
     EffectGlowDistance = 4,
     EffectRGB = false,
     
-    Fog3D = false,
-    Fog3DColor = Color3.fromRGB(200, 200, 200),
-    Fog3DSize = 15,
-    Fog3DTransparency = 0.8,
+    FogEnabled = false,
+    FogColor = Color3.fromRGB(200, 200, 200),
+    FogStart = 30,
+    FogEnd = 150,
     
     Language = "RU",
     ConfirmExit = true,
@@ -222,7 +222,6 @@ local function LoadCFG()
     end)
 end
 LoadCFG()
-
 local Monsters, Loot, Sellers = {}, {}, {}
 local ActiveESP = {}
 local ActiveChams = {}
@@ -287,6 +286,7 @@ local function GetMonsterColor(model, visible)
     if visible == nil then visible = true end
     return visible and CFG.MonsterVisibleColor or CFG.MonsterHiddenColor
 end
+
 local function ClosestMob()
     local best, bestD = nil, CFG.AimFOV
     local ctr = Vector2.new(CAM.ViewportSize.X*0.5, CAM.ViewportSize.Y*0.5)
@@ -378,6 +378,17 @@ RS.RenderStepped:Connect(function(dt)
     else
         if L.Ambient ~= OriginalLighting.Ambient then L.Ambient = OriginalLighting.Ambient end
         if L.Brightness ~= OriginalLighting.Brightness then L.Brightness = OriginalLighting.Brightness end
+    end
+end)
+
+RS.Heartbeat:Connect(function()
+    if CFG.FogEnabled then
+        L.FogColor = CFG.FogColor
+        L.FogStart = CFG.FogStart
+        L.FogEnd = CFG.FogEnd
+    else
+        L.FogStart = 0
+        L.FogEnd = 100000
     end
 end)
 local function RemoveESP(o)
@@ -865,68 +876,6 @@ end
 local function RefreshEffects()
     StartEffectByName(CFG.SelectedEffect)
 end
-
--- 3D ТУМАН (НЕЗАВИСИМЫЙ)
-local Fog3DFolder = nil
-local Fog3DRunning = false
-local Fog3DTask = nil
-local Fog3DParts = {}
-
-local function StopFog3D()
-    Fog3DRunning = false
-    if Fog3DTask then pcall(function() task.cancel(Fog3DTask) end) Fog3DTask = nil end
-    if Fog3DFolder then pcall(function() Fog3DFolder:Destroy() end) Fog3DFolder = nil end
-    Fog3DParts = {}
-end
-
-local function StartFog3D()
-    StopFog3D()
-    if not CFG.Fog3D then return end
-
-    local char = LP.Character
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-
-    Fog3DFolder = Instance.new("Folder")
-    Fog3DFolder.Name = "sAs_pop_3DFog"
-    Fog3DFolder.Parent = workspace
-
-    Fog3DRunning = true
-
-    for i = 1, 15 do
-        local p = Instance.new("Part")
-        p.Name = "CustomFog"
-        p.Shape = Enum.PartType.Ball
-        p.Color = CFG.Fog3DColor
-        p.Material = Enum.Material.SmoothPlastic
-        p.Transparency = CFG.Fog3DTransparency
-        p.CanCollide = false
-        p.Anchored = true
-        p.CastShadow = false
-        p.Parent = Fog3DFolder
-        
-        local offset = Vector3.new(math.random(-30, 30), math.random(-5, 15), math.random(-30, 30))
-        table.insert(Fog3DParts, {part = p, offset = offset, speed = math.random(5, 10) / 100})
-    end
-
-    Fog3DTask = task.spawn(function()
-        while Fog3DRunning and Fog3DFolder and Fog3DFolder.Parent do
-            local t = tick()
-            for _, data in ipairs(Fog3DParts) do
-                if data.part and data.part.Parent then
-                    data.part.Size = Vector3.new(CFG.Fog3DSize, CFG.Fog3DSize, CFG.Fog3DSize)
-                    data.part.Transparency = CFG.Fog3DTransparency
-                    data.part.Color = CFG.Fog3DColor
-                    
-                    local x = data.offset.X + math.sin(t * data.speed + data.offset.X) * 5
-                    local z = data.offset.Z + math.cos(t * data.speed + data.offset.Z) * 5
-                    data.part.Position = hrp.Position + Vector3.new(x, data.offset.Y, z)
-                end
-            end
-            task.wait(0.05)
-        end
-    end)
-end
 local MenuGui = Instance.new("ScreenGui")
 MenuGui.Name = "sAs_pop_Menu"
 MenuGui.ResetOnSpawn = false
@@ -1089,11 +1038,6 @@ ApplyMenuColors = function()
     for _, item in ipairs(AllColorPickers) do
         item.preview.BackgroundColor3 = CFG[item.key]
     end
-    if ToggleBtn then
-        ToggleBtn.BackgroundColor3 = CFG.Theme == "Light" and Color3.fromRGB(255,255,255) or CFG.ToggleBtnColor
-        ToggleBtn.TextColor3 = CFG.Theme == "Light" and Color3.fromRGB(0,0,0) or CFG.ToggleBtnTextColor
-    end
-    if ToggleStroke then ToggleStroke.Color = CFG.MenuAccent end
 end
 
 local function MakeTab(id, label, icon)
@@ -1197,7 +1141,6 @@ local PageESP    = MakeTab("esp",    T("esp"),    "👁")
 local PageChams  = MakeTab("chams",  T("chams"),  "🎨")
 local PageEffect = MakeTab("effect", T("effects"),"✨")
 local PageMenu   = MakeTab("menu",   T("menu"),   "⚙")
-
 local function Section(parent, title)
     local isLight = CFG.Theme == "Glass" or CFG.Theme == "Light"
     local holder = Instance.new("Frame", parent)
@@ -1298,9 +1241,6 @@ local function Check(parent, key, label)
                 end
             end
         end
-        if key == "Fog3D" then
-            if CFG[key] then StartFog3D() else StopFog3D() end
-        end
     end)
 end
 
@@ -1368,7 +1308,6 @@ local function Slider(parent, key, label, min, max, step)
         knob.Position = UDim2.new((val - min) / (max - min), -6, 0.5, -6)
         valLbl.Text = tostring(val)
         if key:find("Effect") then RefreshEffects() end
-        if key:find("Fog3D") then if CFG.Fog3D then StartFog3D() end end
     end
     barBg.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -1434,7 +1373,6 @@ local function ColorPicker(parent, key, label)
         CFG[key] = Color3.fromHSV(hue/360, 0.8, 1)
         swatch.BackgroundColor3 = CFG[key]
         if key == "EffectColor" then RefreshEffects() end
-        if key == "Fog3DColor" then if CFG.Fog3D then StartFog3D() end end
         if key == "MenuColor" or key == "MenuAccent" or key == "MenuTextColor" then ApplyMenuColors() end
         SaveCFG(true)
     end)
@@ -1554,11 +1492,11 @@ Slider(PageEffect, "EffectOrbitRadius", "Радиус кольца", 1, 15, 0.5)
 Check(PageEffect, "EffectOrbitGlow", "Включить свечение")
 Slider(PageEffect, "EffectGlowDistance", "Дальность свечения", 1, 20, 1)
 
-Section(PageEffect, "3D ТУМАН")
-Check(PageEffect, "Fog3D", "Включить 3D туман")
-ColorPicker(PageEffect, "Fog3DColor", "Цвет тумана")
-Slider(PageEffect, "Fog3DSize", "Размер тумана", 5, 50, 1)
-Slider(PageEffect, "Fog3DTransparency", "Прозрачность", 0.5, 1, 0.05)
+Section(PageEffect, "ТУМАН (Настоящий)")
+Check(PageEffect, "FogEnabled", "Включить туман")
+ColorPicker(PageEffect, "FogColor", "Цвет тумана")
+Slider(PageEffect, "FogStart", "Начало (метры)", 5, 100, 1)
+Slider(PageEffect, "FogEnd", "Конец (метры)", 50, 500, 10)
 
 Section(PageMenu, "Темы оформления")
 local themeRow = Instance.new("Frame", PageMenu)
@@ -1714,177 +1652,4 @@ end)
 
 Check(PageMenu, "ConfirmExit", T("confirm_exit"))
 
-local ToggleBtn = Instance.new("TextButton", MenuGui)
-ToggleBtn.Name = "ToggleBtn"
-ToggleBtn.Size = UDim2.new(0, CFG.ToggleBtnSize, 0, CFG.ToggleBtnSize)
-ToggleBtn.Position = UDim2.new(1, -100, 0.5, -CFG.ToggleBtnSize/2)
-ToggleBtn.Text = T("toggle")
-ToggleBtn.Font = FB
-ToggleBtn.TextSize = 14
-ToggleBtn.AutoButtonColor = false
-ToggleBtn.Visible = true
-ToggleBtn.Active = true
-ToggleBtn.ZIndex = 100
-Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(0, 12)
-local ToggleStroke = Instance.new("UIStroke", ToggleBtn)
-ToggleStroke.Thickness = 2
-
-local draggingToggle = false
-local dragStart = nil
-local startPos = nil
-
-ToggleBtn.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        draggingToggle = true
-        dragStart = input.Position
-        startPos = ToggleBtn.Position
-        
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                draggingToggle = false
-            end
-        end)
-    end
-end)
-
-UIS.InputChanged:Connect(function(input)
-    if draggingToggle and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-        local delta = input.Position - dragStart
-        ToggleBtn.Position = UDim2.new(
-            startPos.X.Scale, startPos.X.Offset + delta.X,
-            startPos.Y.Scale, startPos.Y.Offset + delta.Y
-        )
-    end
-end)
-
-local clickStart = nil
-ToggleBtn.MouseButton1Down:Connect(function() clickStart = tick() end)
-ToggleBtn.MouseButton1Click:Connect(function()
-    if clickStart and (tick() - clickStart) < 0.2 then
-        MenuGui.Enabled = true
-        Main.Visible = not Main.Visible
-    end
-end)
-
-local ConfirmGui = Instance.new("ScreenGui")
-ConfirmGui.Name = "sAs_pop_Confirm"
-ConfirmGui.ResetOnSpawn = false
-ConfirmGui.IgnoreGuiInset = true
-ConfirmGui.DisplayOrder = 2000
-ConfirmGui.Parent = GUIPARENT
-ConfirmGui.Enabled = false
-
-local Overlay = Instance.new("Frame", ConfirmGui)
-Overlay.Size = UDim2.new(1, 0, 1, 0)
-Overlay.BackgroundColor3 = Color3.new(0,0,0)
-Overlay.BackgroundTransparency = 0.5
-Overlay.BorderSizePixel = 0
-
-local Dialog = Instance.new("Frame", ConfirmGui)
-Dialog.Size = UDim2.new(0, 360, 0, 180)
-Dialog.Position = UDim2.new(0.5, -180, 0.5, -90)
-Dialog.BackgroundColor3 = CFG.MenuColor
-Dialog.BorderSizePixel = 0
-Instance.new("UICorner", Dialog).CornerRadius = UDim.new(0, 14)
-local DialogStroke = Instance.new("UIStroke", Dialog)
-DialogStroke.Color = CFG.MenuAccent
-DialogStroke.Thickness = 2
-
-local DialogTitle = Instance.new("TextLabel", Dialog)
-DialogTitle.Size = UDim2.new(1, -30, 0, 40)
-DialogTitle.Position = UDim2.new(0, 15, 0, 15)
-DialogTitle.BackgroundTransparency = 1
-DialogTitle.Text = T("confirm_title")
-DialogTitle.TextColor3 = CFG.MenuTextColor
-DialogTitle.Font = FB
-DialogTitle.TextSize = 18
-DialogTitle.TextXAlignment = Enum.TextXAlignment.Left
-
-local DialogText = Instance.new("TextLabel", Dialog)
-DialogText.Size = UDim2.new(1, -30, 0, 40)
-DialogText.Position = UDim2.new(0, 15, 0, 55)
-DialogText.BackgroundTransparency = 1
-DialogText.Text = T("confirm_text")
-DialogText.TextColor3 = CFG.MenuTextColor
-DialogText.TextTransparency = 0.2
-DialogText.Font = FNM
-DialogText.TextSize = 14
-DialogText.TextWrapped = true
-DialogText.TextXAlignment = Enum.TextXAlignment.Left
-
-local YesBtn = Instance.new("TextButton", Dialog)
-YesBtn.Size = UDim2.new(0, 140, 0, 40)
-YesBtn.Position = UDim2.new(0, 15, 1, -55)
-YesBtn.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
-YesBtn.Text = T("yes")
-YesBtn.TextColor3 = Color3.new(1,1,1)
-YesBtn.Font = FB
-YesBtn.TextSize = 14
-YesBtn.AutoButtonColor = false
-Instance.new("UICorner", YesBtn).CornerRadius = UDim.new(0, 8)
-
-local NoBtn = Instance.new("TextButton", Dialog)
-NoBtn.Size = UDim2.new(0, 140, 0, 40)
-NoBtn.Position = UDim2.new(1, -155, 1, -55)
-NoBtn.BackgroundColor3 = CFG.MenuColor:Lerp(Color3.new(1,1,1), 0.12)
-NoBtn.Text = T("no")
-NoBtn.TextColor3 = CFG.MenuTextColor
-NoBtn.Font = FB
-NoBtn.TextSize = 14
-NoBtn.AutoButtonColor = false
-Instance.new("UICorner", NoBtn).CornerRadius = UDim.new(0, 8)
-
-local function ShowConfirm()
-    if not CFG.ConfirmExit then
-        Main.Visible = false
-        return
-    end
-    DialogTitle.Text = T("confirm_title")
-    DialogText.Text = T("confirm_text")
-    YesBtn.Text = T("yes")
-    NoBtn.Text = T("no")
-    Dialog.BackgroundColor3 = CFG.MenuColor
-    DialogStroke.Color = CFG.MenuAccent
-    Dialog.BackgroundTransparency = 1
-    Dialog.Size = UDim2.new(0, 300, 0, 150)
-    ConfirmGui.Enabled = true
-    local ti = TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-    TS:Create(Dialog, ti, {
-        BackgroundTransparency = 0,
-        Size = UDim2.new(0, 360, 0, 180),
-    }):Play()
-end
-
-CloseBtn.MouseButton1Click:Connect(ShowConfirm)
-
-YesBtn.MouseButton1Click:Connect(function()
-    local ti = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-    local t = TS:Create(Dialog, ti, {BackgroundTransparency = 1, Size = UDim2.new(0, 300, 0, 150)})
-    t:Play()
-    t.Completed:Connect(function()
-        ConfirmGui.Enabled = false
-        Main.Visible = false
-    end)
-end)
-
-NoBtn.MouseButton1Click:Connect(function()
-    local ti = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-    local t = TS:Create(Dialog, ti, {BackgroundTransparency = 1, Size = UDim2.new(0, 300, 0, 150)})
-    t:Play()
-    t.Completed:Connect(function()
-        ConfirmGui.Enabled = false
-    end)
-end)
-
-task.spawn(function()
-    while task.wait(0.3) do
-        if Main.Visible then
-            local newSize = UDim2.new(0, CFG.MenuSizeX, 0, CFG.MenuSizeY)
-            if Main.Size ~= newSize then Main.Size = newSize end
-        end
-    end
-end)
-
-ApplyMenuColors()
-RefreshEffects()
-if CFG.Fog3D then StartFog3D() end
+local ToggleBtn = Insta
