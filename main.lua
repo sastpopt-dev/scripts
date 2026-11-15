@@ -312,6 +312,7 @@ local lastAimCheck = 0
 local currentAimTarget = nil
 
 RS.RenderStepped:Connect(function(dt)
+    -- Аим
     if CFG.Aim then
         lastAimCheck = lastAimCheck + dt
         if lastAimCheck > 0.06 then 
@@ -325,6 +326,7 @@ RS.RenderStepped:Connect(function(dt)
         end
     end
 
+    -- Спидхак и NoClip
     local char = LP.Character
     if char then
         local hum = char:FindFirstChildOfClass("Humanoid")
@@ -337,17 +339,29 @@ RS.RenderStepped:Connect(function(dt)
             local wasNoClip = char:GetAttribute("sAs_LastNoClip")
             
             if isCurrentlyNoClip then
+                -- Включаем NoClip (отключаем коллизию у ВСЕХ частей, включая оружие)
                 for _, p in ipairs(char:GetDescendants()) do
                     if p:IsA("BasePart") then p.CanCollide = false end
                 end
             else
+                -- Если мы только что выключили NoClip
                 if wasNoClip == true then
+                    -- 1. Поднимаем наверх (чтобы выйти из пола)
                     rootPart.CFrame = rootPart.CFrame + Vector3.new(0, 3, 0)
-                end
-                for _, p in ipairs(char:GetDescendants()) do
-                    if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then
-                        p.CanCollide = true
-                    end
+                    
+                    -- 2. Ждем 0.1 сек и включаем коллизию только для тела
+                    task.spawn(function()
+                        task.wait(0.1)
+                        for _, p in ipairs(char:GetDescendants()) do
+                            if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" 
+                            and p.Name ~= "RightHand" and p.Name ~= "LeftHand" 
+                            and p.Name ~= "RightUpperArm" and p.Name ~= "LeftUpperArm"
+                            and p.Name ~= "RightLowerArm" and p.Name ~= "LeftLowerArm"
+                            and not p:FindFirstChild("Weapon") then
+                                p.CanCollide = true
+                            end
+                        end
+                    end)
                 end
             end
             char:SetAttribute("sAs_LastNoClip", isCurrentlyNoClip)
