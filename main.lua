@@ -30,7 +30,7 @@ local CFG = {
     FOV = 90, FB = false,
     Aim = false, AimFOV = 200, AimSmooth = 5, AimShowCircle = false,
     
-    P_ESP = false, P_Color = Color3.fromRGB(0,170,255), P_Dst = 500,
+    P_ESP = false, P_Color = Color3.fromRGB(0,170,255), P_HiddenColor = Color3.fromRGB(255, 50, 50), P_Dst = 500,
     M_ESP = false, M_Dst = 500,
     L_ESP = false, L_Dst = 500,
     S_ESP = false, S_Color = Color3.fromRGB(0,255,120), S_Dst = 500,
@@ -46,7 +46,6 @@ local CFG = {
     
     ChamsTransparency = 0.5, ChamsOutline = true,
     
-    -- ТЕМА МЕНЮ
     Theme = "Glass", 
     MenuColor = Color3.fromRGB(14, 14, 20),
     MenuAccent = Color3.fromRGB(88, 101, 242),
@@ -418,6 +417,8 @@ local function RefreshESP(o, clr, name, key, maxD)
         x = {}
         local b = Instance.new("BillboardGui")
         b.AlwaysOnTop = true
+        -- Поднимаем выше (StudsOffset) и меняем размер
+        b.StudsOffset = Vector3.new(0, 2.5, 0) 
         b.Size = UDim2.new(0, 200 * (CFG.ESP_Size / 100), 0, 34 * (CFG.ESP_Size / 100)) 
         b.Adornee = root
         b.Parent = GUIPARENT
@@ -457,19 +458,51 @@ local function RefreshESP(o, clr, name, key, maxD)
     end
 end
 
+-- Улучшенная проверка (стреляем только в голову)
+local function IsVisible(model)
+    local lpChar = LP.Character
+    if not lpChar then return false end
+    local lpRoot = lpChar:FindFirstChild("HumanoidRootPart")
+    if not lpRoot then return false end
+    
+    local target = model:FindFirstChild("Head") or model:FindFirstChild("HumanoidRootPart")
+    if not target then return false end
+    
+    local rp = RaycastParams.new()
+    rp.FilterType = Enum.RaycastFilterType.Exclude
+    local exclude = {lpChar, model}
+    for _, d in ipairs(Monsters) do
+        if d.M and d.M ~= model then table.insert(exclude, d.M) end
+    end
+    for _, p in ipairs(P:GetPlayers()) do
+        if p.Character and p.Character ~= model then table.insert(exclude, p.Character) end
+    end
+    rp.FilterDescendantsInstances = exclude
+    
+    local hit = workspace:Raycast(lpRoot.Position, target.Position - lpRoot.Position, rp)
+    
+    if not hit then return true end
+    if hit.Instance.Transparency > 0.5 then return true end 
+    return false
+end
+
 task.spawn(function()
-    while task.wait(0.3) do
+    while task.wait(0.2) do
         if CFG.P_ESP then
             for _, p in ipairs(P:GetPlayers()) do
                 if p ~= LP and p.Character then
-                    RefreshESP(p.Character, CFG.P_Color, p.Name, "P_ESP", "P_Dst")
+                    local vis = IsVisible(p.Character)
+                    local textColor = vis and CFG.P_Color or CFG.P_HiddenColor
+                    RefreshESP(p.Character, textColor, p.Name, "P_ESP", "P_Dst")
                 end
             end
         end
         if CFG.M_ESP then
             for _, d in ipairs(Monsters) do
                 if d.M and d.M.Parent and IsAliveMob(d.M) then
-                    RefreshESP(d.M, CFG.MonsterVisibleColor, d.M.Name, "M_ESP", "M_Dst")
+                    local vis = IsVisible(d.M)
+                    local textColor = GetMonsterColor(d.M, vis)
+                    RefreshESP(d.M, textColor, d.M.Name, "M_ESP", "M_Dst")
                 end
             end
         end
@@ -489,33 +522,6 @@ task.spawn(function()
         end
     end
 end)
-
-local function IsVisible(model)
-    local lpChar = LP.Character
-    if not lpChar then return false end
-    local lpRoot = lpChar:FindFirstChild("HumanoidRootPart")
-    if not lpRoot then return false end
-    local parts = {}
-    for _, p in ipairs(model:GetChildren()) do
-        if p:IsA("BasePart") then table.insert(parts, p) end
-    end
-    if #parts == 0 then return false end
-    local rp = RaycastParams.new()
-    rp.FilterType = Enum.RaycastFilterType.Exclude
-    local exclude = {lpChar, model}
-    for _, d in ipairs(Monsters) do
-        if d.M and d.M ~= model then table.insert(exclude, d.M) end
-    end
-    for _, p in ipairs(P:GetPlayers()) do
-        if p.Character and p.Character ~= model then table.insert(exclude, p.Character) end
-    end
-    rp.FilterDescendantsInstances = exclude
-    for _, p in ipairs(parts) do
-        local hit = workspace:Raycast(lpRoot.Position, p.Position - lpRoot.Position, rp)
-        if not hit then return true end
-    end
-    return false
-end
 
 local function RemoveChams(model)
     local data = ActiveChams[model]
@@ -569,7 +575,7 @@ local function ApplyChams(model, visible, isMonster)
 end
 
 task.spawn(function()
-    while task.wait(0.3) do
+    while task.wait(0.2) do
         if not CFG.Chams then
             for model in pairs(ActiveChams) do RemoveChams(model) end
         else
@@ -1412,7 +1418,10 @@ Check(PageESP, "ESP_Name", T("esp_name"))
 Check(PageESP, "ESP_Dist", T("esp_dist"))
 Slider(PageESP, "P_Dst", "Players dist", 50, 2000)
 Slider(PageESP, "M_Dst", "Monsters dist", 50, 2000)
-Slider(PageESP, "ESP_Size", T("esp_size"), 50, 300, 10)
+-- ИЗМЕНЕНО: минимум 10 вместо 50
+Slider(PageESP, "ESP_Size", T("esp_size"), 10, 300, 10)
+ColorPicker(PageESP, "P_Color", "Цвет игроков (Видим)")
+ColorPicker(PageESP, "P_HiddenColor", "Цвет игроков (Невидим)")
 
 Section(PageChams, T("chams"))
 Check(PageChams, "Chams", T("chams_enable"))
@@ -1420,8 +1429,8 @@ Check(PageChams, "ChamsPlayers", T("chams_players"))
 Check(PageChams, "ChamsMonsters", T("chams_monsters"))
 Slider(PageChams, "ChamsRange", T("chams_range"), 50, 1000)
 Slider(PageChams, "ChamsTransparency", T("chams_transp"), 0, 1, 0.05)
-ColorPicker(PageChams, "ChamsVisibleColor", "Цвет игроков (Видим)")
-ColorPicker(PageChams, "ChamsHiddenColor", "Цвет игроков (Невидим)")
+ColorPicker(PageChams, "ChamsVisibleColor", "Chams игроков (Видим)")
+ColorPicker(PageChams, "ChamsHiddenColor", "Chams игроков (Невидим)")
 
 Section(PageChams, "ОБЩИЙ ЦВЕТ МОНСТРОВ")
 Desc(PageChams, "Эти цвета применяются и к именам, и к Chams.")
