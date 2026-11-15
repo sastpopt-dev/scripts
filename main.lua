@@ -68,10 +68,10 @@ local CFG = {
     EffectGlowDistance = 4,
     EffectRGB = false,
     
-    Fog = false,
-    FogColor = Color3.fromRGB(200, 200, 200),
-    FogStart = 50,
-    FogEnd = 500,
+    Fog3D = false,
+    Fog3DColor = Color3.fromRGB(200, 200, 200),
+    Fog3DSize = 15,
+    Fog3DTransparency = 0.8,
     
     Language = "RU",
     ConfirmExit = true,
@@ -287,7 +287,6 @@ local function GetMonsterColor(model, visible)
     if visible == nil then visible = true end
     return visible and CFG.MonsterVisibleColor or CFG.MonsterHiddenColor
 end
-
 local function ClosestMob()
     local best, bestD = nil, CFG.AimFOV
     local ctr = Vector2.new(CAM.ViewportSize.X*0.5, CAM.ViewportSize.Y*0.5)
@@ -380,15 +379,6 @@ RS.RenderStepped:Connect(function(dt)
         if L.Ambient ~= OriginalLighting.Ambient then L.Ambient = OriginalLighting.Ambient end
         if L.Brightness ~= OriginalLighting.Brightness then L.Brightness = OriginalLighting.Brightness end
     end
-
-    if CFG.Fog then
-        L.FogColor = CFG.FogColor
-        L.FogStart = CFG.FogStart
-        L.FogEnd = CFG.FogEnd
-    else
-        L.FogStart = 0
-        L.FogEnd = 100000
-    end
 end)
 local function RemoveESP(o)
     local d = ActiveESP[o]
@@ -417,8 +407,7 @@ local function RefreshESP(o, clr, name, key, maxD)
         x = {}
         local b = Instance.new("BillboardGui")
         b.AlwaysOnTop = true
-        -- Поднимаем выше (StudsOffset) и меняем размер
-        b.StudsOffset = Vector3.new(0, 2.5, 0) 
+        b.StudsOffset = Vector3.new(0, 2.5, 0)
         b.Size = UDim2.new(0, 200 * (CFG.ESP_Size / 100), 0, 34 * (CFG.ESP_Size / 100)) 
         b.Adornee = root
         b.Parent = GUIPARENT
@@ -458,7 +447,6 @@ local function RefreshESP(o, clr, name, key, maxD)
     end
 end
 
--- Улучшенная проверка (стреляем только в голову)
 local function IsVisible(model)
     local lpChar = LP.Character
     if not lpChar then return false end
@@ -599,7 +587,6 @@ task.spawn(function()
         end
     end
 end)
-
 local AimCircleGui = nil
 local AimCircleStroke = nil
 local function UpdateAimCircle()
@@ -878,6 +865,68 @@ end
 local function RefreshEffects()
     StartEffectByName(CFG.SelectedEffect)
 end
+
+-- 3D ТУМАН (НЕЗАВИСИМЫЙ)
+local Fog3DFolder = nil
+local Fog3DRunning = false
+local Fog3DTask = nil
+local Fog3DParts = {}
+
+local function StopFog3D()
+    Fog3DRunning = false
+    if Fog3DTask then pcall(function() task.cancel(Fog3DTask) end) Fog3DTask = nil end
+    if Fog3DFolder then pcall(function() Fog3DFolder:Destroy() end) Fog3DFolder = nil end
+    Fog3DParts = {}
+end
+
+local function StartFog3D()
+    StopFog3D()
+    if not CFG.Fog3D then return end
+
+    local char = LP.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    Fog3DFolder = Instance.new("Folder")
+    Fog3DFolder.Name = "sAs_pop_3DFog"
+    Fog3DFolder.Parent = workspace
+
+    Fog3DRunning = true
+
+    for i = 1, 15 do
+        local p = Instance.new("Part")
+        p.Name = "CustomFog"
+        p.Shape = Enum.PartType.Ball
+        p.Color = CFG.Fog3DColor
+        p.Material = Enum.Material.SmoothPlastic
+        p.Transparency = CFG.Fog3DTransparency
+        p.CanCollide = false
+        p.Anchored = true
+        p.CastShadow = false
+        p.Parent = Fog3DFolder
+        
+        local offset = Vector3.new(math.random(-30, 30), math.random(-5, 15), math.random(-30, 30))
+        table.insert(Fog3DParts, {part = p, offset = offset, speed = math.random(5, 10) / 100})
+    end
+
+    Fog3DTask = task.spawn(function()
+        while Fog3DRunning and Fog3DFolder and Fog3DFolder.Parent do
+            local t = tick()
+            for _, data in ipairs(Fog3DParts) do
+                if data.part and data.part.Parent then
+                    data.part.Size = Vector3.new(CFG.Fog3DSize, CFG.Fog3DSize, CFG.Fog3DSize)
+                    data.part.Transparency = CFG.Fog3DTransparency
+                    data.part.Color = CFG.Fog3DColor
+                    
+                    local x = data.offset.X + math.sin(t * data.speed + data.offset.X) * 5
+                    local z = data.offset.Z + math.cos(t * data.speed + data.offset.Z) * 5
+                    data.part.Position = hrp.Position + Vector3.new(x, data.offset.Y, z)
+                end
+            end
+            task.wait(0.05)
+        end
+    end)
+end
 local MenuGui = Instance.new("ScreenGui")
 MenuGui.Name = "sAs_pop_Menu"
 MenuGui.ResetOnSpawn = false
@@ -902,7 +951,6 @@ local MainStroke = Instance.new("UIStroke", Main)
 MainStroke.Thickness = 1.5
 MainStroke.Transparency = 0.5
 
--- Боковая панель
 local Sidebar = Instance.new("Frame", Main)
 Sidebar.Size = UDim2.new(0, 170, 1, 0)
 Sidebar.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
@@ -990,7 +1038,6 @@ local RefreshLangBtns
 local ReloadMenuTexts
 local RefreshEffectButtons
 
--- Функция применения тем
 ApplyMenuColors = function()
     if CFG.Theme == "Glass" then
         Main.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -1018,7 +1065,7 @@ ApplyMenuColors = function()
         SideSep.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
         CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
         CloseBtn.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
-    else -- Dark
+    else
         Main.BackgroundColor3 = Color3.fromRGB(14, 14, 20)
         Main.BackgroundTransparency = 0.05
         MainStroke.Color = CFG.MenuAccent
@@ -1251,6 +1298,9 @@ local function Check(parent, key, label)
                 end
             end
         end
+        if key == "Fog3D" then
+            if CFG[key] then StartFog3D() else StopFog3D() end
+        end
     end)
 end
 
@@ -1318,6 +1368,7 @@ local function Slider(parent, key, label, min, max, step)
         knob.Position = UDim2.new((val - min) / (max - min), -6, 0.5, -6)
         valLbl.Text = tostring(val)
         if key:find("Effect") then RefreshEffects() end
+        if key:find("Fog3D") then if CFG.Fog3D then StartFog3D() end end
     end
     barBg.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -1383,11 +1434,16 @@ local function ColorPicker(parent, key, label)
         CFG[key] = Color3.fromHSV(hue/360, 0.8, 1)
         swatch.BackgroundColor3 = CFG[key]
         if key == "EffectColor" then RefreshEffects() end
+        if key == "Fog3DColor" then if CFG.Fog3D then StartFog3D() end end
         if key == "MenuColor" or key == "MenuAccent" or key == "MenuTextColor" then ApplyMenuColors() end
         SaveCFG(true)
     end)
     table.insert(AllColorPickers, {key = key, preview = swatch})
 end
+
+-- ==========================================
+-- НАПОЛНЕНИЕ МЕНЮ (СТРАНИЦЫ)
+-- ==========================================
 Section(PageSpeed, T("speed"))
 Check(PageSpeed, "SJ", T("speedhack"))
 Slider(PageSpeed, "Speed", T("speed"), 16, 300)
@@ -1398,10 +1454,6 @@ Slider(PageSpeed, "FOV", "FOV", 70, 140)
 
 Section(PageSpeed, T("light"))
 Check(PageSpeed, "FB", T("fullbright"))
-Check(PageSpeed, "Fog", "Туман")
-ColorPicker(PageSpeed, "FogColor", "Цвет тумана")
-Slider(PageSpeed, "FogStart", "Начало тумана", 0, 500, 10)
-Slider(PageSpeed, "FogEnd", "Конец тумана", 100, 2000, 10)
 
 Section(PageSpeed, T("aim"))
 Check(PageSpeed, "Aim", T("aim_enable"))
@@ -1418,7 +1470,6 @@ Check(PageESP, "ESP_Name", T("esp_name"))
 Check(PageESP, "ESP_Dist", T("esp_dist"))
 Slider(PageESP, "P_Dst", "Players dist", 50, 2000)
 Slider(PageESP, "M_Dst", "Monsters dist", 50, 2000)
--- ИЗМЕНЕНО: минимум 10 вместо 50
 Slider(PageESP, "ESP_Size", T("esp_size"), 10, 300, 10)
 ColorPicker(PageESP, "P_Color", "Цвет игроков (Видим)")
 ColorPicker(PageESP, "P_HiddenColor", "Цвет игроков (Невидим)")
@@ -1502,6 +1553,12 @@ Check(PageEffect, "EffectRGB", "RGB режим")
 Slider(PageEffect, "EffectOrbitRadius", "Радиус кольца", 1, 15, 0.5)
 Check(PageEffect, "EffectOrbitGlow", "Включить свечение")
 Slider(PageEffect, "EffectGlowDistance", "Дальность свечения", 1, 20, 1)
+
+Section(PageEffect, "3D ТУМАН")
+Check(PageEffect, "Fog3D", "Включить 3D туман")
+ColorPicker(PageEffect, "Fog3DColor", "Цвет тумана")
+Slider(PageEffect, "Fog3DSize", "Размер тумана", 5, 50, 1)
+Slider(PageEffect, "Fog3DTransparency", "Прозрачность", 0.5, 1, 0.05)
 
 Section(PageMenu, "Темы оформления")
 local themeRow = Instance.new("Frame", PageMenu)
@@ -1830,3 +1887,4 @@ end)
 
 ApplyMenuColors()
 RefreshEffects()
+if CFG.Fog3D then StartFog3D() end
