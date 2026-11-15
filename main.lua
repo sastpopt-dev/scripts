@@ -59,10 +59,17 @@ local CFG = {
     EffectColor = Color3.fromRGB(0, 170, 255),
     EffectSpeed = 1,
     EffectTransparency = 0.4,
+    EffectSize = 1,
+    EffectAmount = 1,
     EffectOrbitRadius = 5,
     EffectOrbitGlow = true,
     EffectGlowDistance = 4,
     EffectRGB = false,
+    
+    Fog = false,
+    FogColor = Color3.fromRGB(200, 200, 200),
+    FogStart = 50,
+    FogEnd = 500,
     
     Language = "RU",
     ConfirmExit = true,
@@ -371,6 +378,16 @@ RS.RenderStepped:Connect(function(dt)
         if L.Ambient ~= OriginalLighting.Ambient then L.Ambient = OriginalLighting.Ambient end
         if L.Brightness ~= OriginalLighting.Brightness then L.Brightness = OriginalLighting.Brightness end
     end
+
+    -- Туман
+    if CFG.Fog then
+        L.FogColor = CFG.FogColor
+        L.FogStart = CFG.FogStart
+        L.FogEnd = CFG.FogEnd
+    else
+        L.FogStart = 0
+        L.FogEnd = 10000
+    end
 end)
 local function RemoveESP(o)
     local d = ActiveESP[o]
@@ -619,7 +636,7 @@ task.spawn(function()
 end)
 
 -- ==========================================
--- 3D ЭФФЕКТЫ (МНОГО ТОЧЕК)
+-- 3D ЭФФЕКТЫ (ШАРЫ, НАСТРОЙКА РАЗМЕРА И ПЛОТНОСТИ)
 -- ==========================================
 local EffectFolder = nil
 local EffectRunning = false
@@ -628,7 +645,7 @@ local EffectParts = {}
 
 local EffectDescriptions = {
     Fireflies = "Светлячки", Sparks = "Искры", Rain = "Дождь",
-    Snow = "Снег", Orbits = "Кольцо из точек", GroundGlow = "Свечение",
+    Snow = "Снег", Orbits = "Кольцо из шаров", GroundGlow = "Свечение",
 }
 
 local function ClearEffectParts()
@@ -642,10 +659,12 @@ local function StopCurrentEffect()
     ClearEffectParts()
 end
 
-local function MakePart(name, size, clr, transparency, parent)
+-- Новая функция создания ШАРА
+local function MakeBall(name, size, clr, transparency, parent)
     local p = Instance.new("Part")
     p.Name = name
-    p.Size = size
+    p.Shape = Enum.PartType.Ball -- Делаем шар!
+    p.Size = Vector3.new(size, size, size)
     p.Color = clr
     p.Material = Enum.Material.Neon
     p.Transparency = transparency
@@ -672,19 +691,23 @@ local function StartEffectByName(name)
     local clr = CFG.EffectColor
     local speed = math.max(CFG.EffectSpeed, 0.1)
     local trans = CFG.EffectTransparency
+    local pSize = CFG.EffectSize
     EffectRunning = true
 
     if name == "Fireflies" then
-        for i = 1, 30 do
-            local p = MakePart("Firefly", Vector3.new(0.3, 0.3, 0.3), clr, trans, EffectFolder)
+        local count = 15 * CFG.EffectAmount
+        for i = 1, count do
+            local p = MakeBall("Firefly", pSize, clr, trans, EffectFolder)
             p.Position = hrp.Position + Vector3.new(math.random(-15, 15), math.random(0, 8), math.random(-15, 15))
             table.insert(EffectParts, {part = p, phase = math.random() * math.pi * 2})
         end
         EffectTask = task.spawn(function()
             while EffectRunning and EffectFolder and EffectFolder.Parent do
                 local t = tick() * speed
+                if CFG.EffectRGB then clr = Color3.fromHSV((t/10)%1, 1, 1) end
                 for _, data in ipairs(EffectParts) do
                     if data.part and data.part.Parent then
+                        data.part.Color = clr
                         data.part.Position = data.part.Position + Vector3.new(
                             math.sin(t + data.phase) * 0.02, math.cos(t + data.phase * 1.3) * 0.02, math.cos(t + data.phase) * 0.02
                         )
@@ -696,8 +719,9 @@ local function StartEffectByName(name)
     elseif name == "Sparks" then
         EffectTask = task.spawn(function()
             while EffectRunning and EffectFolder and EffectFolder.Parent do
-                for i = 1, 5 do
-                    local p = MakePart("Spark", Vector3.new(0.2, 0.2, 0.2), clr, trans, EffectFolder)
+                local count = math.floor(5 * CFG.EffectAmount)
+                for i = 1, count do
+                    local p = MakeBall("Spark", pSize, clr, trans, EffectFolder)
                     local angle = math.random() * math.pi * 2
                     local radius = math.random(2, 12)
                     p.Position = hrp.Position + Vector3.new(math.cos(angle) * radius, -2, math.sin(angle) * radius)
@@ -706,6 +730,7 @@ local function StartEffectByName(name)
                         local life = 0
                         while life < 1.5 and p.Parent do
                             life = life + 0.03
+                            if CFG.EffectRGB then p.Color = Color3.fromHSV((tick()/2)%1, 1, 1) end
                             vel = vel - Vector3.new(0, 9.8 * 0.03, 0)
                             p.Position = p.Position + vel * 0.05
                             p.Transparency = math.clamp(trans + life * 0.6, 0, 1)
@@ -720,11 +745,13 @@ local function StartEffectByName(name)
     elseif name == "Rain" then
         EffectTask = task.spawn(function()
             while EffectRunning and EffectFolder and EffectFolder.Parent do
-                for i = 1, 10 do
-                    local p = MakePart("Rain", Vector3.new(0.1, 1, 0.1), clr, trans, EffectFolder)
+                local count = math.floor(8 * CFG.EffectAmount)
+                for i = 1, count do
+                    local p = MakeBall("Rain", pSize, clr, trans, EffectFolder)
                     p.Position = hrp.Position + Vector3.new(math.random(-25, 25), math.random(15, 25), math.random(-25, 25))
                     task.spawn(function()
                         while p.Parent and p.Position.Y > hrp.Position.Y - 5 do
+                            if CFG.EffectRGB then p.Color = Color3.fromHSV((tick()/2)%1, 1, 1) end
                             p.Position = p.Position - Vector3.new(0, 0.8, 0)
                             task.wait(0.03)
                         end
@@ -737,12 +764,14 @@ local function StartEffectByName(name)
     elseif name == "Snow" then
         EffectTask = task.spawn(function()
             while EffectRunning and EffectFolder and EffectFolder.Parent do
-                for i = 1, 5 do
-                    local p = MakePart("Snow", Vector3.new(0.25, 0.25, 0.25), clr, trans, EffectFolder)
+                local count = math.floor(4 * CFG.EffectAmount)
+                for i = 1, count do
+                    local p = MakeBall("Snow", pSize, clr, trans, EffectFolder)
                     p.Position = hrp.Position + Vector3.new(math.random(-25, 25), math.random(10, 25), math.random(-25, 25))
                     task.spawn(function()
                         local drift = math.random() * math.pi * 2
                         while p.Parent and p.Position.Y > hrp.Position.Y - 5 do
+                            if CFG.EffectRGB then p.Color = Color3.fromHSV((tick()/3)%1, 1, 1) end
                             p.Position = p.Position + Vector3.new(math.sin(drift) * 0.03, -0.15, math.cos(drift) * 0.03)
                             drift = drift + 0.02
                             task.wait(0.03)
@@ -754,10 +783,10 @@ local function StartEffectByName(name)
             end
         end)
     elseif name == "Orbits" then
-        local pointsCount = 24
-        for i = 1, pointsCount do
-            local p = MakePart("OrbitPoint", Vector3.new(0.4, 0.4, 0.4), clr, trans, EffectFolder)
-            table.insert(EffectParts, {part = p, angle = (i / pointsCount) * math.pi * 2})
+        local count = math.floor(24 * CFG.EffectAmount)
+        for i = 1, count do
+            local p = MakeBall("OrbitPoint", pSize, clr, trans, EffectFolder)
+            table.insert(EffectParts, {part = p, angle = (i / count) * math.pi * 2})
         end
         
         EffectTask = task.spawn(function()
@@ -821,6 +850,7 @@ local function StartEffectByName(name)
             local t = 0
             while EffectRunning and EffectFolder and EffectFolder.Parent do
                 t = t + 0.05 * speed
+                if CFG.EffectRGB then glow.Color = Color3.fromHSV((t/5)%1, 1, 1) end
                 glow.Position = hrp.Position - Vector3.new(0, 2.5, 0)
                 glow.Size = Vector3.new(0.1, 8 + math.sin(t) * 2, 8 + math.sin(t) * 2)
                 glow.Transparency = math.clamp(trans + math.sin(t) * 0.2, 0, 1)
@@ -1309,9 +1339,6 @@ ApplyMenuColors = function()
     end
     if ToggleStroke then ToggleStroke.Color = CFG.MenuAccent end
 end
--- ==========================================
--- НАПОЛНЕНИЕ СТРАНИЦ
--- ==========================================
 Section(PageSpeed, T("speed"))
 Check(PageSpeed, "SJ", T("speedhack"))
 Slider(PageSpeed, "Speed", T("speed"), 16, 300)
@@ -1322,6 +1349,10 @@ Slider(PageSpeed, "FOV", "FOV", 70, 140)
 
 Section(PageSpeed, T("light"))
 Check(PageSpeed, "FB", T("fullbright"))
+Check(PageSpeed, "Fog", "Туман")
+ColorPicker(PageSpeed, "FogColor", "Цвет тумана")
+Slider(PageSpeed, "FogStart", "Начало тумана", 0, 500, 10)
+Slider(PageSpeed, "FogEnd", "Конец тумана", 100, 2000, 10)
 
 Section(PageSpeed, T("aim"))
 Check(PageSpeed, "Aim", T("aim_enable"))
@@ -1410,10 +1441,13 @@ Slider(PageEffect, "EffectSpeed", T("eff_speed"), 0.1, 5, 0.1)
 Slider(PageEffect, "EffectTransparency", T("eff_transp"), 0, 1, 0.05)
 ColorPicker(PageEffect, "EffectColor", T("eff_color"))
 
+Slider(PageEffect, "EffectSize", "Размер шаров", 0.5, 5, 0.5)
+Slider(PageEffect, "EffectAmount", "Плотность", 0.5, 3, 0.5)
+Check(PageEffect, "EffectRGB", "RGB режим")
+
 Slider(PageEffect, "EffectOrbitRadius", "Радиус кольца", 1, 15, 0.5)
 Check(PageEffect, "EffectOrbitGlow", "Включить свечение")
 Slider(PageEffect, "EffectGlowDistance", "Дальность свечения", 1, 20, 1)
-Check(PageEffect, "EffectRGB", "RGB режим")
 
 Section(PageMenu, T("menu"))
 ColorPicker(PageMenu, "MenuColor", T("menu_color"))
@@ -1530,9 +1564,6 @@ end)
 
 Check(PageMenu, "ConfirmExit", T("confirm_exit"))
 
--- ==========================================
--- TOGGLE-КНОПКА
--- ==========================================
 local ToggleBtn = Instance.new("TextButton", MenuGui)
 ToggleBtn.Name = "ToggleBtn"
 ToggleBtn.Size = UDim2.new(0, CFG.ToggleBtnSize, 0, CFG.ToggleBtnSize)
@@ -1588,9 +1619,6 @@ ToggleBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- ==========================================
--- ПОДТВЕРЖДЕНИЕ ВЫХОДА
--- ==========================================
 local ConfirmGui = Instance.new("ScreenGui")
 ConfirmGui.Name = "sAs_pop_Confirm"
 ConfirmGui.ResetOnSpawn = false
