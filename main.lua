@@ -1166,8 +1166,6 @@ local PageESP    = MakeTab("esp",    T("esp"),    "👁")
 local PageChams  = MakeTab("chams",  T("chams"),  "🎨")
 local PageEffect = MakeTab("effect", T("effects"),"✨")
 local PageMenu   = MakeTab("menu",   T("menu"),   "⚙")
-end
-LoadCFG()
 local function Section(parent, title)
     local isLight = CFG.Theme == "Glass" or CFG.Theme == "Light"
     local holder = Instance.new("Frame", parent)
