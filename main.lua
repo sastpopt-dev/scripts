@@ -45,6 +45,9 @@ local CFG = {
     MonsterHiddenColor  = Color3.fromRGB(255, 50, 50),
     
     ChamsTransparency = 0.5, ChamsOutline = true,
+    
+    -- ТЕМА МЕНЮ
+    Theme = "Glass", 
     MenuColor = Color3.fromRGB(14, 14, 20),
     MenuAccent = Color3.fromRGB(88, 101, 242),
     MenuTextColor = Color3.fromRGB(240, 240, 245),
@@ -379,14 +382,13 @@ RS.RenderStepped:Connect(function(dt)
         if L.Brightness ~= OriginalLighting.Brightness then L.Brightness = OriginalLighting.Brightness end
     end
 
-    -- Туман
     if CFG.Fog then
         L.FogColor = CFG.FogColor
         L.FogStart = CFG.FogStart
         L.FogEnd = CFG.FogEnd
     else
         L.FogStart = 0
-        L.FogEnd = 10000
+        L.FogEnd = 100000
     end
 end)
 local function RemoveESP(o)
@@ -635,9 +637,6 @@ task.spawn(function()
     end
 end)
 
--- ==========================================
--- 3D ЭФФЕКТЫ (ШАРЫ, НАСТРОЙКА РАЗМЕРА И ПЛОТНОСТИ)
--- ==========================================
 local EffectFolder = nil
 local EffectRunning = false
 local EffectTask = nil
@@ -659,11 +658,10 @@ local function StopCurrentEffect()
     ClearEffectParts()
 end
 
--- Новая функция создания ШАРА
 local function MakeBall(name, size, clr, transparency, parent)
     local p = Instance.new("Part")
     p.Name = name
-    p.Shape = Enum.PartType.Ball -- Делаем шар!
+    p.Shape = Enum.PartType.Ball 
     p.Size = Vector3.new(size, size, size)
     p.Color = clr
     p.Material = Enum.Material.Neon
@@ -695,11 +693,13 @@ local function StartEffectByName(name)
     EffectRunning = true
 
     if name == "Fireflies" then
-        local count = 15 * CFG.EffectAmount
+        local count = math.floor(15 * CFG.EffectAmount)
         for i = 1, count do
             local p = MakeBall("Firefly", pSize, clr, trans, EffectFolder)
-            p.Position = hrp.Position + Vector3.new(math.random(-15, 15), math.random(0, 8), math.random(-15, 15))
-            table.insert(EffectParts, {part = p, phase = math.random() * math.pi * 2})
+            local angle = math.random() * math.pi * 2
+            local height = math.random(2, 8)
+            local radius = math.random(3, 15)
+            table.insert(EffectParts, {part = p, angle = angle, height = height, radius = radius, speed = math.random(5, 10)/10})
         end
         EffectTask = task.spawn(function()
             while EffectRunning and EffectFolder and EffectFolder.Parent do
@@ -708,8 +708,11 @@ local function StartEffectByName(name)
                 for _, data in ipairs(EffectParts) do
                     if data.part and data.part.Parent then
                         data.part.Color = clr
-                        data.part.Position = data.part.Position + Vector3.new(
-                            math.sin(t + data.phase) * 0.02, math.cos(t + data.phase * 1.3) * 0.02, math.cos(t + data.phase) * 0.02
+                        local a = data.angle + t * data.speed
+                        data.part.Position = hrp.Position + Vector3.new(
+                            math.cos(a) * data.radius,
+                            data.height + math.sin(t * 2 + data.angle) * 1,
+                            math.sin(a) * data.radius
                         )
                     end
                 end
@@ -719,13 +722,14 @@ local function StartEffectByName(name)
     elseif name == "Sparks" then
         EffectTask = task.spawn(function()
             while EffectRunning and EffectFolder and EffectFolder.Parent do
-                local count = math.floor(5 * CFG.EffectAmount)
+                local count = math.floor(3 * CFG.EffectAmount)
                 for i = 1, count do
                     local p = MakeBall("Spark", pSize, clr, trans, EffectFolder)
                     local angle = math.random() * math.pi * 2
-                    local radius = math.random(2, 12)
-                    p.Position = hrp.Position + Vector3.new(math.cos(angle) * radius, -2, math.sin(angle) * radius)
-                    local vel = Vector3.new((math.random() - 0.5) * 0.5, math.random(2, 5), (math.random() - 0.5) * 0.5)
+                    local radius = math.random(1, 5)
+                    local startPos = hrp.Position + Vector3.new(math.cos(angle) * radius, -2.5, math.sin(angle) * radius)
+                    p.Position = startPos
+                    local vel = Vector3.new((math.random() - 0.5) * 0.5, math.random(2, 6), (math.random() - 0.5) * 0.5)
                     task.spawn(function()
                         local life = 0
                         while life < 1.5 and p.Parent do
@@ -739,7 +743,7 @@ local function StartEffectByName(name)
                         if p then p:Destroy() end
                     end)
                 end
-                task.wait(0.15 / speed)
+                task.wait(0.1 / speed)
             end
         end)
     elseif name == "Rain" then
@@ -747,12 +751,15 @@ local function StartEffectByName(name)
             while EffectRunning and EffectFolder and EffectFolder.Parent do
                 local count = math.floor(8 * CFG.EffectAmount)
                 for i = 1, count do
-                    local p = MakeBall("Rain", pSize, clr, trans, EffectFolder)
-                    p.Position = hrp.Position + Vector3.new(math.random(-25, 25), math.random(15, 25), math.random(-25, 25))
+                    local p = MakeBall("Rain", pSize * 2, clr, trans, EffectFolder)
+                    local offset = Vector3.new(math.random(-20, 20), math.random(10, 20), math.random(-20, 20))
+                    p.Position = hrp.Position + offset
                     task.spawn(function()
-                        while p.Parent and p.Position.Y > hrp.Position.Y - 5 do
+                        local fallSpeed = 0.5
+                        while p.Parent and offset.Y > -5 do
                             if CFG.EffectRGB then p.Color = Color3.fromHSV((tick()/2)%1, 1, 1) end
-                            p.Position = p.Position - Vector3.new(0, 0.8, 0)
+                            offset = offset - Vector3.new(0, fallSpeed, 0)
+                            p.Position = hrp.Position + offset
                             task.wait(0.03)
                         end
                         if p then p:Destroy() end
@@ -764,16 +771,18 @@ local function StartEffectByName(name)
     elseif name == "Snow" then
         EffectTask = task.spawn(function()
             while EffectRunning and EffectFolder and EffectFolder.Parent do
-                local count = math.floor(4 * CFG.EffectAmount)
+                local count = math.floor(5 * CFG.EffectAmount)
                 for i = 1, count do
                     local p = MakeBall("Snow", pSize, clr, trans, EffectFolder)
-                    p.Position = hrp.Position + Vector3.new(math.random(-25, 25), math.random(10, 25), math.random(-25, 25))
+                    local offset = Vector3.new(math.random(-20, 20), math.random(5, 20), math.random(-20, 20))
+                    p.Position = hrp.Position + offset
                     task.spawn(function()
                         local drift = math.random() * math.pi * 2
-                        while p.Parent and p.Position.Y > hrp.Position.Y - 5 do
+                        while p.Parent and offset.Y > -5 do
                             if CFG.EffectRGB then p.Color = Color3.fromHSV((tick()/3)%1, 1, 1) end
-                            p.Position = p.Position + Vector3.new(math.sin(drift) * 0.03, -0.15, math.cos(drift) * 0.03)
+                            offset = offset + Vector3.new(math.sin(drift) * 0.03, -0.1, math.cos(drift) * 0.03)
                             drift = drift + 0.02
+                            p.Position = hrp.Position + offset
                             task.wait(0.03)
                         end
                         if p then p:Destroy() end
@@ -863,9 +872,6 @@ end
 local function RefreshEffects()
     StartEffectByName(CFG.SelectedEffect)
 end
--- ==========================================
--- UI МЕНЮ (ДИЗАЙН)
--- ==========================================
 local MenuGui = Instance.new("ScreenGui")
 MenuGui.Name = "sAs_pop_Menu"
 MenuGui.ResetOnSpawn = false
@@ -879,34 +885,26 @@ Main.Name = "Main"
 Main.Size = UDim2.new(0, CFG.MenuSizeX, 0, CFG.MenuSizeY)
 Main.Position = UDim2.new(0.5, -CFG.MenuSizeX/2, 0.5, -CFG.MenuSizeY/2)
 Main.BackgroundColor3 = CFG.MenuColor
-Main.BackgroundTransparency = 0.05
 Main.BorderSizePixel = 0
 Main.Active = true
 Main.Draggable = true
 Main.ClipsDescendants = true
 Main.Visible = true
-Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 16)
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 20)
 
 local MainStroke = Instance.new("UIStroke", Main)
-MainStroke.Color = CFG.MenuAccent
 MainStroke.Thickness = 1.5
 MainStroke.Transparency = 0.5
 
--- Плавное появление
-TS:Create(Main, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-    BackgroundTransparency = 0.05
-}):Play()
-
--- Боковая панель (Сайдбар)
+-- Боковая панель
 local Sidebar = Instance.new("Frame", Main)
 Sidebar.Size = UDim2.new(0, 170, 1, 0)
 Sidebar.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 Sidebar.BackgroundTransparency = 0.4
 Sidebar.BorderSizePixel = 0
 Sidebar.ClipsDescendants = true
-Instance.new("UICorner", Sidebar).CornerRadius = UDim.new(0, 16)
+Instance.new("UICorner", Sidebar).CornerRadius = UDim.new(0, 20)
 
--- Логотип
 local LogoFrame = Instance.new("Frame", Sidebar)
 LogoFrame.Size = UDim2.new(1, -24, 0, 60)
 LogoFrame.Position = UDim2.new(0, 12, 0, 12)
@@ -915,23 +913,17 @@ LogoFrame.BackgroundTransparency = 1
 local LogoDot = Instance.new("Frame", LogoFrame)
 LogoDot.Size = UDim2.new(0, 36, 0, 36)
 LogoDot.Position = UDim2.new(0, 0, 0.5, -18)
-LogoDot.BackgroundColor3 = CFG.MenuAccent
 LogoDot.BorderSizePixel = 0
 Instance.new("UICorner", LogoDot).CornerRadius = UDim.new(0, 10)
 
 local LogoDotGrad = Instance.new("UIGradient", LogoDot)
 LogoDotGrad.Rotation = 45
-LogoDotGrad.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, CFG.MenuAccent),
-    ColorSequenceKeypoint.new(1, CFG.MenuAccent:Lerp(Color3.new(1,1,1), 0.4)),
-})
 
 local LogoLbl = Instance.new("TextLabel", LogoFrame)
 LogoLbl.Size = UDim2.new(1, -46, 0, 18)
 LogoLbl.Position = UDim2.new(0, 46, 0.5, -20)
 LogoLbl.BackgroundTransparency = 1
 LogoLbl.Text = T("title")
-LogoLbl.TextColor3 = CFG.MenuTextColor
 LogoLbl.Font = FB
 LogoLbl.TextSize = 14
 LogoLbl.TextXAlignment = Enum.TextXAlignment.Left
@@ -941,7 +933,6 @@ LogoSub.Size = UDim2.new(1, -46, 0, 14)
 LogoSub.Position = UDim2.new(0, 46, 0.5, 0)
 LogoSub.BackgroundTransparency = 1
 LogoSub.Text = T("subtitle")
-LogoSub.TextColor3 = CFG.MenuAccent
 LogoSub.Font = FNM
 LogoSub.TextSize = 11
 LogoSub.TextXAlignment = Enum.TextXAlignment.Left
@@ -949,7 +940,6 @@ LogoSub.TextXAlignment = Enum.TextXAlignment.Left
 local SideSep = Instance.new("Frame", Sidebar)
 SideSep.Size = UDim2.new(1, -24, 0, 1)
 SideSep.Position = UDim2.new(0, 12, 0, 82)
-SideSep.BackgroundColor3 = CFG.MenuTextColor
 SideSep.BackgroundTransparency = 0.85
 SideSep.BorderSizePixel = 0
 
@@ -964,10 +954,8 @@ TabListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 local CloseBtn = Instance.new("TextButton", Sidebar)
 CloseBtn.Size = UDim2.new(1, -24, 0, 36)
 CloseBtn.Position = UDim2.new(0, 12, 1, -48)
-CloseBtn.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
 CloseBtn.BackgroundTransparency = 0.7
 CloseBtn.Text = "×  " .. T("confirm_title")
-CloseBtn.TextColor3 = Color3.fromRGB(255, 130, 130)
 CloseBtn.Font = FNM
 CloseBtn.TextSize = 13
 CloseBtn.AutoButtonColor = false
@@ -975,7 +963,6 @@ Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 10)
 CloseBtn.MouseEnter:Connect(function() TS:Create(CloseBtn, TweenInfo.new(0.15), {BackgroundTransparency = 0.3}):Play() end)
 CloseBtn.MouseLeave:Connect(function() TS:Create(CloseBtn, TweenInfo.new(0.15), {BackgroundTransparency = 0.7}):Play() end)
 
--- Контентная часть
 local Body = Instance.new("Frame", Main)
 Body.Size = UDim2.new(1, -170, 1, 0)
 Body.Position = UDim2.new(0, 170, 0, 0)
@@ -997,6 +984,65 @@ local RefreshLangBtns
 local ReloadMenuTexts
 local RefreshEffectButtons
 
+-- Функция применения тем
+ApplyMenuColors = function()
+    if CFG.Theme == "Glass" then
+        Main.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        Main.BackgroundTransparency = 0.85
+        MainStroke.Color = Color3.fromRGB(255, 255, 255)
+        MainStroke.Transparency = 0.2
+        Sidebar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        Sidebar.BackgroundTransparency = 0.9
+        LogoLbl.TextColor3 = Color3.fromRGB(20, 20, 20)
+        LogoSub.TextColor3 = CFG.MenuAccent
+        LogoDot.BackgroundColor3 = CFG.MenuAccent
+        SideSep.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+        CloseBtn.TextColor3 = Color3.fromRGB(220, 60, 60)
+        CloseBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    elseif CFG.Theme == "Light" then
+        Main.BackgroundColor3 = Color3.fromRGB(240, 240, 245)
+        Main.BackgroundTransparency = 0
+        MainStroke.Color = Color3.fromRGB(200, 200, 200)
+        MainStroke.Transparency = 0
+        Sidebar.BackgroundColor3 = Color3.fromRGB(220, 220, 225)
+        Sidebar.BackgroundTransparency = 0
+        LogoLbl.TextColor3 = Color3.fromRGB(20, 20, 20)
+        LogoSub.TextColor3 = CFG.MenuAccent
+        LogoDot.BackgroundColor3 = CFG.MenuAccent
+        SideSep.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+        CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        CloseBtn.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
+    else -- Dark
+        Main.BackgroundColor3 = Color3.fromRGB(14, 14, 20)
+        Main.BackgroundTransparency = 0.05
+        MainStroke.Color = CFG.MenuAccent
+        MainStroke.Transparency = 0.5
+        Sidebar.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+        Sidebar.BackgroundTransparency = 0.4
+        LogoLbl.TextColor3 = Color3.fromRGB(240, 240, 245)
+        LogoSub.TextColor3 = CFG.MenuAccent
+        LogoDot.BackgroundColor3 = CFG.MenuAccent
+        SideSep.BackgroundColor3 = Color3.fromRGB(240, 240, 245)
+        CloseBtn.TextColor3 = Color3.fromRGB(255, 130, 130)
+        CloseBtn.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
+    end
+    
+    LogoDotGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, CFG.MenuAccent),
+        ColorSequenceKeypoint.new(1, CFG.MenuAccent:Lerp(Color3.new(1,1,1), 0.4)),
+    })
+    
+    if RefreshTabColors then RefreshTabColors() end
+    for _, item in ipairs(AllColorPickers) do
+        item.preview.BackgroundColor3 = CFG[item.key]
+    end
+    if ToggleBtn then
+        ToggleBtn.BackgroundColor3 = CFG.Theme == "Light" and Color3.fromRGB(255,255,255) or CFG.ToggleBtnColor
+        ToggleBtn.TextColor3 = CFG.Theme == "Light" and Color3.fromRGB(0,0,0) or CFG.ToggleBtnTextColor
+    end
+    if ToggleStroke then ToggleStroke.Color = CFG.MenuAccent end
+end
+
 local function MakeTab(id, label, icon)
     local btn = Instance.new("TextButton", TabList)
     btn.Size = UDim2.new(1, 0, 0, 38)
@@ -1011,7 +1057,6 @@ local function MakeTab(id, label, icon)
     iconLbl.Position = UDim2.new(0, 10, 0.5, -12)
     iconLbl.BackgroundTransparency = 1
     iconLbl.Text = icon or "•"
-    iconLbl.TextColor3 = CFG.MenuTextColor
     iconLbl.Font = FNM
     iconLbl.TextSize = 16
     iconLbl.TextTransparency = 0.4
@@ -1021,11 +1066,10 @@ local function MakeTab(id, label, icon)
     lbl.Position = UDim2.new(0, 40, 0, 0)
     lbl.BackgroundTransparency = 1
     lbl.Text = label
-    lbl.TextColor3 = CFG.MenuTextColor
-    lbl.TextTransparency = 0.4
     lbl.Font = FNM
     lbl.TextSize = 13
     lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.TextTransparency = 0.4
 
     btn.MouseEnter:Connect(function()
         if CurrentTab ~= id then TS:Create(btn, TweenInfo.new(0.15), {BackgroundTransparency = 0.85}):Play() end
@@ -1069,6 +1113,9 @@ local function MakeTab(id, label, icon)
 end
 
 RefreshTabColors = function()
+    local isLight = CFG.Theme == "Glass" or CFG.Theme == "Light"
+    local textColor = isLight and Color3.fromRGB(20,20,20) or Color3.fromRGB(240,240,245)
+    
     for tid, tbtn in pairs(Tabs) do
         local data = TabLabels[tid]
         if tid == CurrentTab then
@@ -1083,9 +1130,9 @@ RefreshTabColors = function()
         else
             tbtn.BackgroundTransparency = 1
             if data then
-                data.icon.TextColor3 = CFG.MenuTextColor
+                data.icon.TextColor3 = textColor
                 data.icon.TextTransparency = 0.4
-                data.label.TextColor3 = CFG.MenuTextColor
+                data.label.TextColor3 = textColor
                 data.label.TextTransparency = 0.4
             end
         end
@@ -1098,8 +1145,8 @@ local PageChams  = MakeTab("chams",  T("chams"),  "🎨")
 local PageEffect = MakeTab("effect", T("effects"),"✨")
 local PageMenu   = MakeTab("menu",   T("menu"),   "⚙")
 
--- Фабрики UI
 local function Section(parent, title)
+    local isLight = CFG.Theme == "Glass" or CFG.Theme == "Light"
     local holder = Instance.new("Frame", parent)
     holder.Size = UDim2.new(1, 0, 0, 26)
     holder.BackgroundTransparency = 1
@@ -1115,12 +1162,14 @@ local function Section(parent, title)
 end
 
 local function Desc(parent, text)
+    local isLight = CFG.Theme == "Glass" or CFG.Theme == "Light"
+    local textColor = isLight and Color3.fromRGB(100,100,100) or CFG.MenuTextColor
     local d = Instance.new("TextLabel", parent)
     d.Size = UDim2.new(1, 0, 0, 18)
     d.BackgroundTransparency = 1
     d.Text = text
-    d.TextColor3 = CFG.MenuTextColor
-    d.TextTransparency = 0.45
+    d.TextColor3 = textColor
+    d.TextTransparency = 0.2
     d.Font = FNM
     d.TextSize = 11
     d.TextXAlignment = Enum.TextXAlignment.Left
@@ -1128,10 +1177,14 @@ local function Desc(parent, text)
 end
 
 local function Check(parent, key, label)
+    local isLight = CFG.Theme == "Glass" or CFG.Theme == "Light"
+    local textColor = isLight and Color3.fromRGB(20,20,20) or CFG.MenuTextColor
+    local bgTransparency = isLight and 0.9 or 0.95
+    
     local btn = Instance.new("TextButton", parent)
     btn.Size = UDim2.new(1, 0, 0, 38)
-    btn.BackgroundColor3 = CFG.MenuTextColor
-    btn.BackgroundTransparency = 0.95
+    btn.BackgroundColor3 = isLight and Color3.fromRGB(255,255,255) or CFG.MenuTextColor
+    btn.BackgroundTransparency = bgTransparency
     btn.Text = ""
     btn.AutoButtonColor = false
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
@@ -1141,7 +1194,7 @@ local function Check(parent, key, label)
     t.Position = UDim2.new(0, 12, 0, 0)
     t.BackgroundTransparency = 1
     t.Text = label
-    t.TextColor3 = CFG.MenuTextColor
+    t.TextColor3 = textColor
     t.Font = FNM
     t.TextSize = 13
     t.TextXAlignment = Enum.TextXAlignment.Left
@@ -1149,7 +1202,7 @@ local function Check(parent, key, label)
     local toggleBg = Instance.new("Frame", btn)
     toggleBg.Size = UDim2.new(0, 34, 0, 18)
     toggleBg.Position = UDim2.new(1, -46, 0.5, -9)
-    toggleBg.BackgroundColor3 = CFG[key] and CFG.MenuAccent or Color3.fromRGB(50, 50, 60)
+    toggleBg.BackgroundColor3 = CFG[key] and CFG.MenuAccent or Color3.fromRGB(150, 150, 160)
     toggleBg.BorderSizePixel = 0
     Instance.new("UICorner", toggleBg).CornerRadius = UDim.new(1, 0)
 
@@ -1160,13 +1213,13 @@ local function Check(parent, key, label)
     knob.BorderSizePixel = 0
     Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
 
-    btn.MouseEnter:Connect(function() TS:Create(btn, TweenInfo.new(0.15), {BackgroundTransparency = 0.88}):Play() end)
-    btn.MouseLeave:Connect(function() TS:Create(btn, TweenInfo.new(0.15), {BackgroundTransparency = 0.95}):Play() end)
+    btn.MouseEnter:Connect(function() TS:Create(btn, TweenInfo.new(0.15), {BackgroundTransparency = bgTransparency - 0.05}):Play() end)
+    btn.MouseLeave:Connect(function() TS:Create(btn, TweenInfo.new(0.15), {BackgroundTransparency = bgTransparency}):Play() end)
 
     btn.MouseButton1Click:Connect(function()
         CFG[key] = not CFG[key]
         local targetPos = CFG[key] and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)
-        local targetColor = CFG[key] and CFG.MenuAccent or Color3.fromRGB(50, 50, 60)
+        local targetColor = CFG[key] and CFG.MenuAccent or Color3.fromRGB(150, 150, 160)
         TS:Create(knob, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {Position = targetPos}):Play()
         TS:Create(toggleBg, TweenInfo.new(0.2), {BackgroundColor3 = targetColor}):Play()
         SaveCFG(true)
@@ -1197,10 +1250,14 @@ end
 
 local function Slider(parent, key, label, min, max, step)
     step = step or 1
+    local isLight = CFG.Theme == "Glass" or CFG.Theme == "Light"
+    local textColor = isLight and Color3.fromRGB(20,20,20) or CFG.MenuTextColor
+    local bgTransparency = isLight and 0.9 or 0.95
+
     local frame = Instance.new("Frame", parent)
     frame.Size = UDim2.new(1, 0, 0, 54)
-    frame.BackgroundColor3 = CFG.MenuTextColor
-    frame.BackgroundTransparency = 0.95
+    frame.BackgroundColor3 = isLight and Color3.fromRGB(255,255,255) or CFG.MenuTextColor
+    frame.BackgroundTransparency = bgTransparency
     frame.BorderSizePixel = 0
     Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
 
@@ -1209,7 +1266,7 @@ local function Slider(parent, key, label, min, max, step)
     lbl.Position = UDim2.new(0, 12, 0, 4)
     lbl.BackgroundTransparency = 1
     lbl.Text = label
-    lbl.TextColor3 = CFG.MenuTextColor
+    lbl.TextColor3 = textColor
     lbl.Font = FNM
     lbl.TextSize = 12
     lbl.TextXAlignment = Enum.TextXAlignment.Left
@@ -1227,7 +1284,7 @@ local function Slider(parent, key, label, min, max, step)
     local barBg = Instance.new("Frame", frame)
     barBg.Size = UDim2.new(1, -24, 0, 4)
     barBg.Position = UDim2.new(0, 12, 1, -16)
-    barBg.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    barBg.BackgroundColor3 = isLight and Color3.fromRGB(220,220,230) or Color3.fromRGB(30, 30, 40)
     barBg.BorderSizePixel = 0
     Instance.new("UICorner", barBg).CornerRadius = UDim.new(1, 0)
 
@@ -1277,10 +1334,14 @@ end
 
 local AllColorPickers = {}
 local function ColorPicker(parent, key, label)
+    local isLight = CFG.Theme == "Glass" or CFG.Theme == "Light"
+    local textColor = isLight and Color3.fromRGB(20,20,20) or CFG.MenuTextColor
+    local bgTransparency = isLight and 0.9 or 0.95
+
     local frame = Instance.new("Frame", parent)
     frame.Size = UDim2.new(1, 0, 0, 38)
-    frame.BackgroundColor3 = CFG.MenuTextColor
-    frame.BackgroundTransparency = 0.95
+    frame.BackgroundColor3 = isLight and Color3.fromRGB(255,255,255) or CFG.MenuTextColor
+    frame.BackgroundTransparency = bgTransparency
     frame.BorderSizePixel = 0
     Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
 
@@ -1289,7 +1350,7 @@ local function ColorPicker(parent, key, label)
     t.Position = UDim2.new(0, 12, 0, 0)
     t.BackgroundTransparency = 1
     t.Text = label
-    t.TextColor3 = CFG.MenuTextColor
+    t.TextColor3 = textColor
     t.Font = FNM
     t.TextSize = 12
     t.TextXAlignment = Enum.TextXAlignment.Left
@@ -1320,24 +1381,6 @@ local function ColorPicker(parent, key, label)
         SaveCFG(true)
     end)
     table.insert(AllColorPickers, {key = key, preview = swatch})
-end
-
-ApplyMenuColors = function()
-    Main.BackgroundColor3 = CFG.MenuColor
-    MainStroke.Color = CFG.MenuAccent
-    LogoLbl.TextColor3 = CFG.MenuTextColor
-    LogoSub.TextColor3 = CFG.MenuAccent
-    LogoDot.BackgroundColor3 = CFG.MenuAccent
-    SideSep.BackgroundColor3 = CFG.MenuTextColor
-    if RefreshTabColors then RefreshTabColors() end
-    for _, item in ipairs(AllColorPickers) do
-        item.preview.BackgroundColor3 = CFG[item.key]
-    end
-    if ToggleBtn then
-        ToggleBtn.BackgroundColor3 = CFG.ToggleBtnColor
-        ToggleBtn.TextColor3 = CFG.ToggleBtnTextColor
-    end
-    if ToggleStroke then ToggleStroke.Color = CFG.MenuAccent end
 end
 Section(PageSpeed, T("speed"))
 Check(PageSpeed, "SJ", T("speedhack"))
@@ -1392,26 +1435,28 @@ local EffectNames = {"None", "Fireflies", "Sparks", "Rain", "Snow", "Orbits", "G
 local EffectButtons = {}
 
 RefreshEffectButtons = function()
+    local isLight = CFG.Theme == "Glass" or CFG.Theme == "Light"
     for name, btn in pairs(EffectButtons) do
         if name == CFG.SelectedEffect then
             btn.BackgroundColor3 = CFG.MenuAccent
             btn.BackgroundTransparency = 0.2
             btn.TextColor3 = Color3.new(1,1,1)
         else
-            btn.BackgroundColor3 = CFG.MenuTextColor
-            btn.BackgroundTransparency = 0.95
-            btn.TextColor3 = CFG.MenuTextColor
+            btn.BackgroundColor3 = isLight and Color3.fromRGB(255,255,255) or CFG.MenuTextColor
+            btn.BackgroundTransparency = isLight and 0.9 or 0.95
+            btn.TextColor3 = isLight and Color3.fromRGB(20,20,20) or CFG.MenuTextColor
         end
     end
 end
 
 for _, name in ipairs(EffectNames) do
+    local isLight = CFG.Theme == "Glass" or CFG.Theme == "Light"
     local btn = Instance.new("TextButton", PageEffect)
     btn.Size = UDim2.new(1, 0, 0, 34)
-    btn.BackgroundColor3 = CFG.MenuTextColor
-    btn.BackgroundTransparency = 0.95
+    btn.BackgroundColor3 = isLight and Color3.fromRGB(255,255,255) or CFG.MenuTextColor
+    btn.BackgroundTransparency = isLight and 0.9 or 0.95
     btn.Text = (name == "None") and T("off") or (name .. "  ·  " .. (EffectDescriptions[name] or ""))
-    btn.TextColor3 = CFG.MenuTextColor
+    btn.TextColor3 = isLight and Color3.fromRGB(20,20,20) or CFG.MenuTextColor
     btn.Font = FNM
     btn.TextSize = 12
     btn.TextXAlignment = Enum.TextXAlignment.Left
@@ -1421,10 +1466,10 @@ for _, name in ipairs(EffectNames) do
     local pad = Instance.new("UIPadding", btn)
     pad.PaddingLeft = UDim.new(0, 12)
     btn.MouseEnter:Connect(function()
-        if CFG.SelectedEffect ~= name then TS:Create(btn, TweenInfo.new(0.15), {BackgroundTransparency = 0.85}):Play() end
+        if CFG.SelectedEffect ~= name then TS:Create(btn, TweenInfo.new(0.15), {BackgroundTransparency = 0.8}):Play() end
     end)
     btn.MouseLeave:Connect(function()
-        if CFG.SelectedEffect ~= name then TS:Create(btn, TweenInfo.new(0.15), {BackgroundTransparency = 0.95}):Play() end
+        if CFG.SelectedEffect ~= name then TS:Create(btn, TweenInfo.new(0.15), {BackgroundTransparency = isLight and 0.9 or 0.95}):Play() end
     end)
     btn.MouseButton1Click:Connect(function()
         CFG.SelectedEffect = name
@@ -1441,7 +1486,7 @@ Slider(PageEffect, "EffectSpeed", T("eff_speed"), 0.1, 5, 0.1)
 Slider(PageEffect, "EffectTransparency", T("eff_transp"), 0, 1, 0.05)
 ColorPicker(PageEffect, "EffectColor", T("eff_color"))
 
-Slider(PageEffect, "EffectSize", "Размер шаров", 0.5, 5, 0.5)
+Slider(PageEffect, "EffectSize", "Размер шаров", 0.1, 5, 0.1)
 Slider(PageEffect, "EffectAmount", "Плотность", 0.5, 3, 0.5)
 Check(PageEffect, "EffectRGB", "RGB режим")
 
@@ -1449,10 +1494,50 @@ Slider(PageEffect, "EffectOrbitRadius", "Радиус кольца", 1, 15, 0.5)
 Check(PageEffect, "EffectOrbitGlow", "Включить свечение")
 Slider(PageEffect, "EffectGlowDistance", "Дальность свечения", 1, 20, 1)
 
+Section(PageMenu, "Темы оформления")
+local themeRow = Instance.new("Frame", PageMenu)
+themeRow.Size = UDim2.new(1, 0, 0, 36)
+themeRow.BackgroundTransparency = 1
+local themeLayout = Instance.new("UIListLayout", themeRow)
+themeLayout.FillDirection = Enum.FillDirection.Horizontal
+themeLayout.Padding = UDim.new(0, 6)
+
+local themeBtns = {}
+local function RefreshThemeBtns()
+    for code, b in pairs(themeBtns) do
+        if code == CFG.Theme then
+            b.BackgroundColor3 = CFG.MenuAccent
+            b.BackgroundTransparency = 0.2
+            b.TextColor3 = Color3.new(1,1,1)
+        else
+            local isLight = CFG.Theme == "Glass" or CFG.Theme == "Light"
+            b.BackgroundColor3 = isLight and Color3.fromRGB(255,255,255) or CFG.MenuTextColor
+            b.BackgroundTransparency = isLight and 0.9 or 0.95
+            b.TextColor3 = isLight and Color3.fromRGB(20,20,20) or CFG.MenuTextColor
+        end
+    end
+end
+
+for _, theme in ipairs({"Glass", "Dark", "Light"}) do
+    local b = Instance.new("TextButton", themeRow)
+    b.Size = UDim2.new(0, 100, 1, 0)
+    b.Text = (theme == "Glass") and "Стекло" or (theme == "Dark" and "Тёмная" or "Светлая")
+    b.Font = FNM
+    b.TextSize = 12
+    b.AutoButtonColor = false
+    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
+    b.MouseButton1Click:Connect(function()
+        CFG.Theme = theme
+        ApplyMenuColors()
+        RefreshThemeBtns()
+        RefreshEffectButtons()
+        SaveCFG(true)
+    end)
+    themeBtns[theme] = b
+end
+RefreshThemeBtns()
+
 Section(PageMenu, T("menu"))
-ColorPicker(PageMenu, "MenuColor", T("menu_color"))
-ColorPicker(PageMenu, "MenuAccent", T("menu_accent"))
-ColorPicker(PageMenu, "MenuTextColor", T("menu_text"))
 Slider(PageMenu, "MenuSizeX", T("menu_w"), 400, 1000, 10)
 Slider(PageMenu, "MenuSizeY", T("menu_h"), 250, 800, 10)
 
@@ -1466,10 +1551,12 @@ blackBtn.TextSize = 13
 blackBtn.AutoButtonColor = false
 Instance.new("UICorner", blackBtn).CornerRadius = UDim.new(0, 8)
 blackBtn.MouseButton1Click:Connect(function()
+    CFG.Theme = "Dark"
     CFG.MenuColor = Color3.fromRGB(0, 0, 0)
     CFG.MenuAccent = Color3.fromRGB(88, 101, 242)
     CFG.MenuTextColor = Color3.fromRGB(240, 240, 245)
     ApplyMenuColors()
+    RefreshThemeBtns()
     SaveCFG(true)
 end)
 
@@ -1483,15 +1570,16 @@ langLayout.Padding = UDim.new(0, 6)
 
 local langBtns = {}
 RefreshLangBtns = function()
+    local isLight = CFG.Theme == "Glass" or CFG.Theme == "Light"
     for code, b in pairs(langBtns) do
         if code == CFG.Language then
             b.BackgroundColor3 = CFG.MenuAccent
             b.BackgroundTransparency = 0.2
             b.TextColor3 = Color3.new(1,1,1)
         else
-            b.BackgroundColor3 = CFG.MenuTextColor
-            b.BackgroundTransparency = 0.95
-            b.TextColor3 = CFG.MenuTextColor
+            b.BackgroundColor3 = isLight and Color3.fromRGB(255,255,255) or CFG.MenuTextColor
+            b.BackgroundTransparency = isLight and 0.9 or 0.95
+            b.TextColor3 = isLight and Color3.fromRGB(20,20,20) or CFG.MenuTextColor
         end
     end
 end
@@ -1514,7 +1602,6 @@ for _, code in ipairs({"RU", "EN", "ABORT"}) do
     local b = Instance.new("TextButton", langRow)
     b.Size = UDim2.new(0, 100, 1, 0)
     b.Text = code
-    b.TextColor3 = CFG.MenuTextColor
     b.Font = FNM
     b.TextSize = 12
     b.AutoButtonColor = false
@@ -1544,10 +1631,7 @@ saveBtn.MouseButton1Click:Connect(function() SaveCFG(false) end)
 
 local loadBtn = Instance.new("TextButton", PageMenu)
 loadBtn.Size = UDim2.new(1, 0, 0, 36)
-loadBtn.BackgroundColor3 = CFG.MenuTextColor
-loadBtn.BackgroundTransparency = 0.95
 loadBtn.Text = T("load")
-loadBtn.TextColor3 = CFG.MenuTextColor
 loadBtn.Font = FNM
 loadBtn.TextSize = 13
 loadBtn.AutoButtonColor = false
@@ -1568,9 +1652,7 @@ local ToggleBtn = Instance.new("TextButton", MenuGui)
 ToggleBtn.Name = "ToggleBtn"
 ToggleBtn.Size = UDim2.new(0, CFG.ToggleBtnSize, 0, CFG.ToggleBtnSize)
 ToggleBtn.Position = UDim2.new(1, -100, 0.5, -CFG.ToggleBtnSize/2)
-ToggleBtn.BackgroundColor3 = CFG.ToggleBtnColor
 ToggleBtn.Text = T("toggle")
-ToggleBtn.TextColor3 = CFG.ToggleBtnTextColor
 ToggleBtn.Font = FB
 ToggleBtn.TextSize = 14
 ToggleBtn.AutoButtonColor = false
@@ -1579,7 +1661,6 @@ ToggleBtn.Active = true
 ToggleBtn.ZIndex = 100
 Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(0, 12)
 local ToggleStroke = Instance.new("UIStroke", ToggleBtn)
-ToggleStroke.Color = CFG.MenuAccent
 ToggleStroke.Thickness = 2
 
 local draggingToggle = false
@@ -1738,5 +1819,5 @@ task.spawn(function()
     end
 end)
 
-RefreshEffects()
 ApplyMenuColors()
+RefreshEffects()
