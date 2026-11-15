@@ -220,9 +220,7 @@ local function LoadCFG()
             end
         end
     end)
-end
-LoadCFG()
-local Monsters, Loot, Sellers = {}, {}, {}
+    local Monsters, Loot, Sellers = {}, {}, {}
 local ActiveESP = {}
 local ActiveChams = {}
 local OriginalLighting = { Ambient = L.Ambient, Brightness = L.Brightness }
@@ -391,7 +389,7 @@ RS.Heartbeat:Connect(function()
         L.FogEnd = 100000
     end
 end)
-local function RemoveESP(o)
+    local function RemoveESP(o)
     local d = ActiveESP[o]
     if d then
         if d.B then pcall(function() d.B:Destroy() end) end
@@ -598,7 +596,7 @@ task.spawn(function()
         end
     end
 end)
-local AimCircleGui = nil
+    local AimCircleGui = nil
 local AimCircleStroke = nil
 local function UpdateAimCircle()
     if not CFG.AimShowCircle then
@@ -875,8 +873,8 @@ end
 
 local function RefreshEffects()
     StartEffectByName(CFG.SelectedEffect)
-end
-local MenuGui = Instance.new("ScreenGui")
+    end
+    local MenuGui = Instance.new("ScreenGui")
 MenuGui.Name = "sAs_pop_Menu"
 MenuGui.ResetOnSpawn = false
 MenuGui.IgnoreGuiInset = true
@@ -1038,6 +1036,33 @@ ApplyMenuColors = function()
     for _, item in ipairs(AllColorPickers) do
         item.preview.BackgroundColor3 = CFG[item.key]
     end
+    if ToggleBtn then
+        if CFG.Theme == "Glass" then
+            ToggleBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            ToggleBtn.BackgroundTransparency = 0.85
+            ToggleBtn.TextColor3 = Color3.fromRGB(20, 20, 20)
+            if ToggleStroke then
+                ToggleStroke.Color = Color3.fromRGB(255, 255, 255)
+                ToggleStroke.Transparency = 0.2
+            end
+        elseif CFG.Theme == "Light" then
+            ToggleBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            ToggleBtn.BackgroundTransparency = 0
+            ToggleBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
+            if ToggleStroke then
+                ToggleStroke.Color = Color3.fromRGB(200, 200, 200)
+                ToggleStroke.Transparency = 0
+            end
+        else
+            ToggleBtn.BackgroundColor3 = CFG.ToggleBtnColor
+            ToggleBtn.BackgroundTransparency = 0
+            ToggleBtn.TextColor3 = CFG.ToggleBtnTextColor
+            if ToggleStroke then
+                ToggleStroke.Color = CFG.MenuAccent
+                ToggleStroke.Transparency = 0
+            end
+        end
+    end
 end
 
 local function MakeTab(id, label, icon)
@@ -1141,6 +1166,8 @@ local PageESP    = MakeTab("esp",    T("esp"),    "👁")
 local PageChams  = MakeTab("chams",  T("chams"),  "🎨")
 local PageEffect = MakeTab("effect", T("effects"),"✨")
 local PageMenu   = MakeTab("menu",   T("menu"),   "⚙")
+end
+LoadCFG()
 local function Section(parent, title)
     local isLight = CFG.Theme == "Glass" or CFG.Theme == "Light"
     local holder = Instance.new("Frame", parent)
@@ -1219,28 +1246,6 @@ local function Check(parent, key, label)
         TS:Create(knob, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {Position = targetPos}):Play()
         TS:Create(toggleBg, TweenInfo.new(0.2), {BackgroundColor3 = targetColor}):Play()
         SaveCFG(true)
-        
-        if key == "P_ESP" or key == "M_ESP" or key == "L_ESP" or key == "S_ESP" then
-            if not CFG[key] then
-                for obj in pairs(ActiveESP) do
-                    if (key == "P_ESP" and P:GetPlayerFromCharacter(obj)) or
-                       (key == "M_ESP" and IsMob(obj)) or
-                       (key == "L_ESP" and IsLoot(obj)) or
-                       (key == "S_ESP" and IsSeller(obj)) then
-                        RemoveESP(obj)
-                    end
-                end
-            end
-        end
-        if key == "Chams" or key == "ChamsPlayers" or key == "ChamsMonsters" then
-            if not CFG[key] then
-                for model in pairs(ActiveChams) do
-                    if (key == "Chams" or (key == "ChamsPlayers" and P:GetPlayerFromCharacter(model)) or (key == "ChamsMonsters" and IsMob(model))) then
-                        RemoveChams(model)
-                    end
-                end
-            end
-        end
     end)
 end
 
@@ -1379,20 +1384,14 @@ local function ColorPicker(parent, key, label)
     table.insert(AllColorPickers, {key = key, preview = swatch})
 end
 
--- ==========================================
--- НАПОЛНЕНИЕ МЕНЮ (СТРАНИЦЫ)
--- ==========================================
 Section(PageSpeed, T("speed"))
 Check(PageSpeed, "SJ", T("speedhack"))
 Slider(PageSpeed, "Speed", T("speed"), 16, 300)
 Check(PageSpeed, "NoClip", T("noclip"))
-
 Section(PageSpeed, T("camera"))
 Slider(PageSpeed, "FOV", "FOV", 70, 140)
-
 Section(PageSpeed, T("light"))
 Check(PageSpeed, "FB", T("fullbright"))
-
 Section(PageSpeed, T("aim"))
 Check(PageSpeed, "Aim", T("aim_enable"))
 Slider(PageSpeed, "AimFOV", T("aim_fov"), 10, 600)
@@ -1409,8 +1408,8 @@ Check(PageESP, "ESP_Dist", T("esp_dist"))
 Slider(PageESP, "P_Dst", "Players dist", 50, 2000)
 Slider(PageESP, "M_Dst", "Monsters dist", 50, 2000)
 Slider(PageESP, "ESP_Size", T("esp_size"), 10, 300, 10)
-ColorPicker(PageESP, "P_Color", "Цвет игроков (Видим)")
-ColorPicker(PageESP, "P_HiddenColor", "Цвет игроков (Невидим)")
+ColorPicker(PageESP, "P_Color", "Игроки (Видим)")
+ColorPicker(PageESP, "P_HiddenColor", "Игроки (Невидим)")
 
 Section(PageChams, T("chams"))
 Check(PageChams, "Chams", T("chams_enable"))
@@ -1418,13 +1417,13 @@ Check(PageChams, "ChamsPlayers", T("chams_players"))
 Check(PageChams, "ChamsMonsters", T("chams_monsters"))
 Slider(PageChams, "ChamsRange", T("chams_range"), 50, 1000)
 Slider(PageChams, "ChamsTransparency", T("chams_transp"), 0, 1, 0.05)
-ColorPicker(PageChams, "ChamsVisibleColor", "Chams игроков (Видим)")
-ColorPicker(PageChams, "ChamsHiddenColor", "Chams игроков (Невидим)")
+ColorPicker(PageChams, "ChamsVisibleColor", "Chams (Видим)")
+ColorPicker(PageChams, "ChamsHiddenColor", "Chams (Невидим)")
 
-Section(PageChams, "ОБЩИЙ ЦВЕТ МОНСТРОВ")
-Desc(PageChams, "Эти цвета применяются и к именам, и к Chams.")
-ColorPicker(PageChams, "MonsterVisibleColor", "Цвет монстров (Видим)")
-ColorPicker(PageChams, "MonsterHiddenColor", "Цвет монстров (Невидим)")
+Section(PageChams, "ЦВЕТ МОНСТРОВ")
+Desc(PageChams, "Применяется к именам и Chams.")
+ColorPicker(PageChams, "MonsterVisibleColor", "Монстры (Видим)")
+ColorPicker(PageChams, "MonsterHiddenColor", "Монстры (Невидим)")
 
 Section(PageEffect, T("effects"))
 Desc(PageEffect, T("effects_desc"))
@@ -1463,12 +1462,6 @@ for _, name in ipairs(EffectNames) do
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
     local pad = Instance.new("UIPadding", btn)
     pad.PaddingLeft = UDim.new(0, 12)
-    btn.MouseEnter:Connect(function()
-        if CFG.SelectedEffect ~= name then TS:Create(btn, TweenInfo.new(0.15), {BackgroundTransparency = 0.8}):Play() end
-    end)
-    btn.MouseLeave:Connect(function()
-        if CFG.SelectedEffect ~= name then TS:Create(btn, TweenInfo.new(0.15), {BackgroundTransparency = isLight and 0.9 or 0.95}):Play() end
-    end)
     btn.MouseButton1Click:Connect(function()
         CFG.SelectedEffect = name
         RefreshEffectButtons()
@@ -1483,13 +1476,11 @@ Section(PageEffect, "Effect")
 Slider(PageEffect, "EffectSpeed", T("eff_speed"), 0.1, 5, 0.1)
 Slider(PageEffect, "EffectTransparency", T("eff_transp"), 0, 1, 0.05)
 ColorPicker(PageEffect, "EffectColor", T("eff_color"))
-
 Slider(PageEffect, "EffectSize", "Размер шаров", 0.1, 5, 0.1)
 Slider(PageEffect, "EffectAmount", "Плотность", 0.5, 3, 0.5)
 Check(PageEffect, "EffectRGB", "RGB режим")
-
 Slider(PageEffect, "EffectOrbitRadius", "Радиус кольца", 1, 15, 0.5)
-Check(PageEffect, "EffectOrbitGlow", "Включить свечение")
+Check(PageEffect, "EffectOrbitGlow", "Свечение кольца")
 Slider(PageEffect, "EffectGlowDistance", "Дальность свечения", 1, 20, 1)
 
 Section(PageEffect, "ТУМАН (Настоящий)")
@@ -1498,7 +1489,7 @@ ColorPicker(PageEffect, "FogColor", "Цвет тумана")
 Slider(PageEffect, "FogStart", "Начало (метры)", 5, 100, 1)
 Slider(PageEffect, "FogEnd", "Конец (метры)", 50, 500, 10)
 
-Section(PageMenu, "Темы оформления")
+Section(PageMenu, "Темы")
 local themeRow = Instance.new("Frame", PageMenu)
 themeRow.Size = UDim2.new(1, 0, 0, 36)
 themeRow.BackgroundTransparency = 1
@@ -1545,81 +1536,6 @@ Section(PageMenu, T("menu"))
 Slider(PageMenu, "MenuSizeX", T("menu_w"), 400, 1000, 10)
 Slider(PageMenu, "MenuSizeY", T("menu_h"), 250, 800, 10)
 
-local blackBtn = Instance.new("TextButton", PageMenu)
-blackBtn.Size = UDim2.new(1, 0, 0, 34)
-blackBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-blackBtn.Text = T("black_menu")
-blackBtn.TextColor3 = Color3.new(1,1,1)
-blackBtn.Font = FNM
-blackBtn.TextSize = 13
-blackBtn.AutoButtonColor = false
-Instance.new("UICorner", blackBtn).CornerRadius = UDim.new(0, 8)
-blackBtn.MouseButton1Click:Connect(function()
-    CFG.Theme = "Dark"
-    CFG.MenuColor = Color3.fromRGB(0, 0, 0)
-    CFG.MenuAccent = Color3.fromRGB(88, 101, 242)
-    CFG.MenuTextColor = Color3.fromRGB(240, 240, 245)
-    ApplyMenuColors()
-    RefreshThemeBtns()
-    SaveCFG(true)
-end)
-
-Section(PageMenu, T("language"))
-local langRow = Instance.new("Frame", PageMenu)
-langRow.Size = UDim2.new(1, 0, 0, 36)
-langRow.BackgroundTransparency = 1
-local langLayout = Instance.new("UIListLayout", langRow)
-langLayout.FillDirection = Enum.FillDirection.Horizontal
-langLayout.Padding = UDim.new(0, 6)
-
-local langBtns = {}
-RefreshLangBtns = function()
-    local isLight = CFG.Theme == "Glass" or CFG.Theme == "Light"
-    for code, b in pairs(langBtns) do
-        if code == CFG.Language then
-            b.BackgroundColor3 = CFG.MenuAccent
-            b.BackgroundTransparency = 0.2
-            b.TextColor3 = Color3.new(1,1,1)
-        else
-            b.BackgroundColor3 = isLight and Color3.fromRGB(255,255,255) or CFG.MenuTextColor
-            b.BackgroundTransparency = isLight and 0.9 or 0.95
-            b.TextColor3 = isLight and Color3.fromRGB(20,20,20) or CFG.MenuTextColor
-        end
-    end
-end
-
-ReloadMenuTexts = function()
-    LogoLbl.Text = T("title")
-    LogoSub.Text = T("subtitle")
-    for tid, data in pairs(TabLabels) do
-        if tid == "speed" then data.label.Text = T("speed")
-        elseif tid == "esp" then data.label.Text = T("esp")
-        elseif tid == "chams" then data.label.Text = T("chams")
-        elseif tid == "effect" then data.label.Text = T("effects")
-        elseif tid == "menu" then data.label.Text = T("menu")
-        end
-    end
-    CloseBtn.Text = "×  " .. T("confirm_title")
-end
-
-for _, code in ipairs({"RU", "EN", "ABORT"}) do
-    local b = Instance.new("TextButton", langRow)
-    b.Size = UDim2.new(0, 100, 1, 0)
-    b.Text = code
-    b.Font = FNM
-    b.TextSize = 12
-    b.AutoButtonColor = false
-    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
-    b.MouseButton1Click:Connect(function()
-        CFG.Language = code
-        RefreshLangBtns()
-        ReloadMenuTexts()
-        SaveCFG(true)
-    end)
-    langBtns[code] = b
-end
-RefreshLangBtns()
-
 Section(PageMenu, T("config"))
 local saveBtn = Instance.new("TextButton", PageMenu)
 saveBtn.Size = UDim2.new(1, 0, 0, 36)
@@ -1644,12 +1560,133 @@ loadBtn.MouseButton1Click:Connect(function()
     LoadCFG()
     if ApplyMenuColors then ApplyMenuColors() end
     if RefreshEffects then RefreshEffects() end
-    if RefreshLangBtns then RefreshLangBtns() end
-    if RefreshEffectButtons then RefreshEffectButtons() end
-    if ReloadMenuTexts then ReloadMenuTexts() end
     Notify(T("loaded"), CFG.MenuAccent)
 end)
 
 Check(PageMenu, "ConfirmExit", T("confirm_exit"))
 
-local ToggleBtn = Insta
+-- КНОПКА sAs
+local ToggleBtn = Instance.new("TextButton", MenuGui)
+ToggleBtn.Name = "ToggleBtn"
+ToggleBtn.Size = UDim2.new(0, CFG.ToggleBtnSize, 0, CFG.ToggleBtnSize)
+ToggleBtn.Position = UDim2.new(1, -100, 0.5, -CFG.ToggleBtnSize/2)
+ToggleBtn.Text = T("toggle")
+ToggleBtn.Font = FB
+ToggleBtn.TextSize = 14
+ToggleBtn.AutoButtonColor = false
+ToggleBtn.Visible = true
+ToggleBtn.Active = true
+ToggleBtn.ZIndex = 100
+Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(0, 12)
+local ToggleStroke = Instance.new("UIStroke", ToggleBtn)
+ToggleStroke.Thickness = 2
+
+local draggingToggle = false
+local dragStart = nil
+local startPos = nil
+
+ToggleBtn.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        draggingToggle = true
+        dragStart = input.Position
+        startPos = ToggleBtn.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                draggingToggle = false
+            end
+        end)
+    end
+end)
+
+UIS.InputChanged:Connect(function(input)
+    if draggingToggle and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        ToggleBtn.Position = UDim2.new(
+            startPos.X.Scale, startPos.X.Offset + delta.X,
+            startPos.Y.Scale, startPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+local clickStart = nil
+ToggleBtn.MouseButton1Down:Connect(function() clickStart = tick() end)
+ToggleBtn.MouseButton1Click:Connect(function()
+    if clickStart and (tick() - clickStart) < 0.2 then
+        MenuGui.Enabled = true
+        Main.Visible = not Main.Visible
+    end
+end)
+
+-- ЛОГИКА ВЫХОДА
+local ConfirmGui = Instance.new("ScreenGui")
+ConfirmGui.Name = "sAs_pop_Confirm"
+ConfirmGui.ResetOnSpawn = false
+ConfirmGui.IgnoreGuiInset = true
+ConfirmGui.DisplayOrder = 2000
+ConfirmGui.Parent = GUIPARENT
+ConfirmGui.Enabled = false
+
+local Overlay = Instance.new("Frame", ConfirmGui)
+Overlay.Size = UDim2.new(1, 0, 1, 0)
+Overlay.BackgroundColor3 = Color3.new(0,0,0)
+Overlay.BackgroundTransparency = 0.5
+Overlay.BorderSizePixel = 0
+
+local Dialog = Instance.new("Frame", ConfirmGui)
+Dialog.Size = UDim2.new(0, 360, 0, 180)
+Dialog.Position = UDim2.new(0.5, -180, 0.5, -90)
+Dialog.BackgroundColor3 = CFG.MenuColor
+Dialog.BorderSizePixel = 0
+Instance.new("UICorner", Dialog).CornerRadius = UDim.new(0, 14)
+local DialogStroke = Instance.new("UIStroke", Dialog)
+DialogStroke.Color = CFG.MenuAccent
+DialogStroke.Thickness = 2
+
+local DialogTitle = Instance.new("TextLabel", Dialog)
+DialogTitle.Size = UDim2.new(1, -30, 0, 40)
+DialogTitle.Position = UDim2.new(0, 15, 0, 15)
+DialogTitle.BackgroundTransparency = 1
+DialogTitle.Text = T("confirm_title")
+DialogTitle.TextColor3 = CFG.MenuTextColor
+DialogTitle.Font = FB
+DialogTitle.TextSize = 18
+DialogTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+local DialogText = Instance.new("TextLabel", Dialog)
+DialogText.Size = UDim2.new(1, -30, 0, 40)
+DialogText.Position = UDim2.new(0, 15, 0, 55)
+DialogText.BackgroundTransparency = 1
+DialogText.Text = T("confirm_text")
+DialogText.TextColor3 = CFG.MenuTextColor
+DialogText.TextTransparency = 0.2
+DialogText.Font = FNM
+DialogText.TextSize = 14
+DialogText.TextWrapped = true
+DialogText.TextXAlignment = Enum.TextXAlignment.Left
+
+local YesBtn = Instance.new("TextButton", Dialog)
+YesBtn.Size = UDim2.new(0, 140, 0, 40)
+YesBtn.Position = UDim2.new(0, 15, 1, -55)
+YesBtn.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
+YesBtn.Text = T("yes")
+YesBtn.TextColor3 = Color3.new(1,1,1)
+YesBtn.Font = FB
+YesBtn.TextSize = 14
+YesBtn.AutoButtonColor = false
+Instance.new("UICorner", YesBtn).CornerRadius = UDim.new(0, 8)
+
+local NoBtn = Instance.new("TextButton", Dialog)
+NoBtn.Size = UDim2.new(0, 140, 0, 40)
+NoBtn.Position = UDim2.new(1, -155, 1, -55)
+NoBtn.BackgroundColor3 = CFG.MenuColor:Lerp(Color3.new(1,1,1), 0.12)
+NoBtn.Text = T("no")
+NoBtn.TextColor3 = CFG.MenuTextColor
+NoBtn.Font = FB
+NoBtn.TextSize = 14
+NoBtn.AutoButtonColor = false
+Instance.new("UICorner", NoBtn).CornerRadius = UDim.new(0, 8)
+
+local function ShowConfirm()
+    if not CFG.ConfirmExit then
+        Main.Visible
