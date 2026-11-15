@@ -54,10 +54,15 @@ local CFG = {
     ToggleBtnColor = Color3.fromRGB(14, 14, 20),
     ToggleBtnTextColor = Color3.fromRGB(255, 255, 255),
     ToggleBtnVisible = true,
+    
     SelectedEffect = "None",
     EffectColor = Color3.fromRGB(0, 170, 255),
     EffectSpeed = 1,
     EffectTransparency = 0.4,
+    EffectOrbitRadius = 4,
+    EffectOrbitWidth = 0.3,
+    EffectRGB = false,
+    
     Language = "RU",
     ConfirmExit = true,
 }
@@ -323,17 +328,29 @@ RS.RenderStepped:Connect(function(dt)
     local char = LP.Character
     if char then
         local hum = char:FindFirstChildOfClass("Humanoid")
+        local rootPart = char:FindFirstChild("HumanoidRootPart")
+        
         if hum then hum.WalkSpeed = CFG.SJ and CFG.Speed or 16 end
-        if CFG.NoClip then
-            for _, p in ipairs(char:GetDescendants()) do
-                if p:IsA("BasePart") then p.CanCollide = false end
-            end
-        else
-            for _, p in ipairs(char:GetDescendants()) do
-                if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then
-                    p.CanCollide = true
+        
+        if rootPart then
+            local isCurrentlyNoClip = CFG.NoClip
+            local wasNoClip = char:GetAttribute("sAs_LastNoClip")
+            
+            if isCurrentlyNoClip then
+                for _, p in ipairs(char:GetDescendants()) do
+                    if p:IsA("BasePart") then p.CanCollide = false end
+                end
+            else
+                if wasNoClip == true then
+                    rootPart.CFrame = rootPart.CFrame + Vector3.new(0, 3, 0)
+                end
+                for _, p in ipairs(char:GetDescendants()) do
+                    if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then
+                        p.CanCollide = true
+                    end
                 end
             end
+            char:SetAttribute("sAs_LastNoClip", isCurrentlyNoClip)
         end
     end
 
@@ -347,6 +364,9 @@ RS.RenderStepped:Connect(function(dt)
         if L.Brightness ~= OriginalLighting.Brightness then L.Brightness = OriginalLighting.Brightness end
     end
 end)
+-- ==========================================
+-- НОВАЯ СИСТЕМА ЭФФЕКТОВ (С ЛИНИЕЙ И RGB)
+-- ==========================================
 local function RemoveESP(o)
     local d = ActiveESP[o]
     if d then
@@ -593,19 +613,24 @@ task.spawn(function()
     end
 end)
 
+-- ==========================================
+-- 3D ЭФФЕКТЫ (ОПТИМИЗИРОВАННЫЕ)
+-- ==========================================
 local EffectFolder = nil
 local EffectRunning = false
 local EffectTask = nil
 local EffectParts = {}
+local EffectBeam = nil
 
 local EffectDescriptions = {
     Fireflies = "Светлячки", Sparks = "Искры", Rain = "Дождь",
-    Snow = "Снег", Orbits = "Орбиты", GroundGlow = "Свечение",
+    Snow = "Снег", Orbits = "Кольцо (Линия)", GroundGlow = "Свечение",
 }
 
 local function ClearEffectParts()
     if EffectFolder then pcall(function() EffectFolder:Destroy() end) EffectFolder = nil end
     EffectParts = {}
+    EffectBeam = nil
 end
 
 local function StopCurrentEffect()
@@ -730,21 +755,69 @@ local function StartEffectByName(name)
             end
         end)
     elseif name == "Orbits" then
-        for i = 1, 8 do
-            local p = MakePart("Orbit", Vector3.new(0.6, 0.6, 0.6), clr, trans, EffectFolder)
-            table.insert(EffectParts, {part = p, angle = (i / 8) * math.pi * 2})
+        -- НОВЫЙ ЭФФЕКТ: Линия-кольцо
+        local points = 12
+        local radius = CFG.EffectOrbitRadius or 4
+        
+        -- Создаём точки
+        local attachments = {}
+        for i = 1, points do
+            local p = MakePart("OrbitPoint", Vector3.new(0.2, 0.2, 0.2), clr, 1, EffectFolder)
+            p.Anchored = true
+            p.CanCollide = false
+            table.insert(attachments, {part = p, angle = (i / points) * math.pi * 2})
         end
+
+        -- Создаём Beam (луч) для соединения
+        local beam = Instance.new("Beam")
+        beam.Parent = EffectFolder
+        beam.FaceCamera = true
+        beam.Segments = 10
+        beam.Width0 = CFG.EffectOrbitWidth or 0.3
+        beam.Width1 = CFG.EffectOrbitWidth or 0.3
+        beam.Color = ColorSequence.new(clr)
+        beam.Transparency = NumberSequence.new(trans)
+        
+        local a0 = Instance.new("Attachment", attachments[1].part)
+        local a1 = Instance.new("Attachment", attachments[#attachments].part)
+        beam.Attachment0 = a0
+        beam.Attachment1 = a1
+
+        -- Сохраняем в таблицу для обновления
+        EffectBeam = {beam = beam, points = attachments, radius = radius, segments = points}
+        table.insert(EffectParts, EffectBeam)
+
         EffectTask = task.spawn(function()
+            local colorStep = 0
             while EffectRunning and EffectFolder and EffectFolder.Parent do
                 local t = tick() * speed
-                for i, data in ipairs(EffectParts) do
+                
+                -- Движение точек по кругу
+                for i, data in ipairs(EffectBeam.points) do
                     if data.part and data.part.Parent then
                         local angle = data.angle + t
-                        local radius = 3 + math.sin(t * 2 + i) * 0.5
-                        local height = math.sin(t * 1.5 + i) * 1.5
-                        data.part.Position = hrp.Position + Vector3.new(math.cos(angle) * radius, height, math.sin(angle) * radius)
+                        data.part.Position = hrp.Position + Vector3.new(
+                            math.cos(angle) * EffectBeam.radius,
+                            math.sin(t * 1.5 + i) * 1.5, -- Высота (изгиб)
+                            math.sin(angle) * EffectBeam.radius
+                        )
                     end
                 end
+                
+                -- Обновление ширины и цвета
+                if EffectBeam.beam and EffectBeam.beam.Parent then
+                    EffectBeam.beam.Width0 = CFG.EffectOrbitWidth or 0.3
+                    EffectBeam.beam.Width1 = CFG.EffectOrbitWidth or 0.3
+                    
+                    if CFG.EffectRGB then
+                        colorStep = colorStep + 0.02 * speed
+                        local hue = (colorStep % 1)
+                        EffectBeam.beam.Color = ColorSequence.new(Color3.fromHSV(hue, 1, 1))
+                    else
+                        EffectBeam.beam.Color = ColorSequence.new(clr)
+                    end
+                end
+                
                 task.wait(0.03)
             end
         end)
@@ -1345,6 +1418,11 @@ Section(PageEffect, "Effect")
 Slider(PageEffect, "EffectSpeed", T("eff_speed"), 0.1, 5, 0.1)
 Slider(PageEffect, "EffectTransparency", T("eff_transp"), 0, 1, 0.05)
 ColorPicker(PageEffect, "EffectColor", T("eff_color"))
+
+-- Новые настройки для кольца
+Slider(PageEffect, "EffectOrbitRadius", "Радиус кольца", 1, 15, 0.5)
+Slider(PageEffect, "EffectOrbitWidth", "Ширина кольца", 0.05, 2, 0.05)
+Check(PageEffect, "EffectRGB", "RGB режим")
 
 Section(PageMenu, T("menu"))
 ColorPicker(PageMenu, "MenuColor", T("menu_color"))
