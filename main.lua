@@ -1,4 +1,4 @@
-local Players = game:GetService("Players")
+тоlocal Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
 local Workspace = game:GetService("Workspace")
@@ -1615,76 +1615,3 @@ ToggleBtn.MouseButton1Click:Connect(function()
         Main.Visible = not Main.Visible
     end
 end)
-
--- ЛОГИКА ВЫХОДА
-local ConfirmGui = Instance.new("ScreenGui")
-ConfirmGui.Name = "sAs_pop_Confirm"
-ConfirmGui.ResetOnSpawn = false
-ConfirmGui.IgnoreGuiInset = true
-ConfirmGui.DisplayOrder = 2000
-ConfirmGui.Parent = GUIPARENT
-ConfirmGui.Enabled = false
-
-local Overlay = Instance.new("Frame", ConfirmGui)
-Overlay.Size = UDim2.new(1, 0, 1, 0)
-Overlay.BackgroundColor3 = Color3.new(0,0,0)
-Overlay.BackgroundTransparency = 0.5
-Overlay.BorderSizePixel = 0
-
-local Dialog = Instance.new("Frame", ConfirmGui)
-Dialog.Size = UDim2.new(0, 360, 0, 180)
-Dialog.Position = UDim2.new(0.5, -180, 0.5, -90)
-Dialog.BackgroundColor3 = CFG.MenuColor
-Dialog.BorderSizePixel = 0
-Instance.new("UICorner", Dialog).CornerRadius = UDim.new(0, 14)
-local DialogStroke = Instance.new("UIStroke", Dialog)
-DialogStroke.Color = CFG.MenuAccent
-DialogStroke.Thickness = 2
-
-local DialogTitle = Instance.new("TextLabel", Dialog)
-DialogTitle.Size = UDim2.new(1, -30, 0, 40)
-DialogTitle.Position = UDim2.new(0, 15, 0, 15)
-DialogTitle.BackgroundTransparency = 1
-DialogTitle.Text = T("confirm_title")
-DialogTitle.TextColor3 = CFG.MenuTextColor
-DialogTitle.Font = FB
-DialogTitle.TextSize = 18
-DialogTitle.TextXAlignment = Enum.TextXAlignment.Left
-
-local DialogText = Instance.new("TextLabel", Dialog)
-DialogText.Size = UDim2.new(1, -30, 0, 40)
-DialogText.Position = UDim2.new(0, 15, 0, 55)
-DialogText.BackgroundTransparency = 1
-DialogText.Text = T("confirm_text")
-DialogText.TextColor3 = CFG.MenuTextColor
-DialogText.TextTransparency = 0.2
-DialogText.Font = FNM
-DialogText.TextSize = 14
-DialogText.TextWrapped = true
-DialogText.TextXAlignment = Enum.TextXAlignment.Left
-
-local YesBtn = Instance.new("TextButton", Dialog)
-YesBtn.Size = UDim2.new(0, 140, 0, 40)
-YesBtn.Position = UDim2.new(0, 15, 1, -55)
-YesBtn.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
-YesBtn.Text = T("yes")
-YesBtn.TextColor3 = Color3.new(1,1,1)
-YesBtn.Font = FB
-YesBtn.TextSize = 14
-YesBtn.AutoButtonColor = false
-Instance.new("UICorner", YesBtn).CornerRadius = UDim.new(0, 8)
-
-local NoBtn = Instance.new("TextButton", Dialog)
-NoBtn.Size = UDim2.new(0, 140, 0, 40)
-NoBtn.Position = UDim2.new(1, -155, 1, -55)
-NoBtn.BackgroundColor3 = CFG.MenuColor:Lerp(Color3.new(1,1,1), 0.12)
-NoBtn.Text = T("no")
-NoBtn.TextColor3 = CFG.MenuTextColor
-NoBtn.Font = FB
-NoBtn.TextSize = 14
-NoBtn.AutoButtonColor = false
-Instance.new("UICorner", NoBtn).CornerRadius = UDim.new(0, 8)
-
-local function ShowConfirm()
-    if not CFG.ConfirmExit then
-        Main.Visible
